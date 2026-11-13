@@ -1,0 +1,4 @@
+// The exe's icon (resource 1: Explorer, the taskbar, and win::shell::set_window_icon) and its
+// manifest (PerMonitorV2, long paths, Windows 10+), as src/Kiln's app.manifest and kiln.ico.
+1 ICON "kiln.ico"
+1 24 "kiln.manifest"

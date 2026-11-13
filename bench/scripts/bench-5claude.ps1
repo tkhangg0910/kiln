@@ -1,7 +1,7 @@
 param([string]$exe, [string]$label)
 # 5 panes running the real claude (temp config) via the single-instance handoff; then idle.
-$S = if ($env:CLAYO_BENCH_DIR) { $env:CLAYO_BENCH_DIR } else { Join-Path $env:TEMP "clayo-bench" }
-foreach ($x in "run\work","run\claude","run\codex","run\lad\Clayo") { New-Item -ItemType Directory -Force (Join-Path $S $x) | Out-Null }
+$S = if ($env:KILN_BENCH_DIR) { $env:KILN_BENCH_DIR } else { Join-Path $env:TEMP "kiln-bench" }
+foreach ($x in "run\work","run\claude","run\codex","run\lad\Kiln") { New-Item -ItemType Directory -Force (Join-Path $S $x) | Out-Null }
 Add-Type @"
 using System; using System.Runtime.InteropServices;
 public class Q {
@@ -13,7 +13,7 @@ function PrivWS($id) { $pr = Get-Process -Id $id -ErrorAction SilentlyContinue; 
 function Kids($id) { Get-CimInstance Win32_Process -Filter "ParentProcessId=$id" | ForEach-Object { $_; Kids $_.ProcessId } }
 $work = "$S\run\work"
 $env:CLAUDE_CONFIG_DIR = "$S\run\claude"; $env:LOCALAPPDATA = "$S\run\lad"; $env:CODEX_HOME = "$S\run\codex"
-Remove-Item Env:CLAYO_BENCH_AGENT_CMD, Env:CLAYO_BENCH_TYPE -ErrorAction SilentlyContinue
+Remove-Item Env:KILN_BENCH_AGENT_CMD, Env:KILN_BENCH_TYPE -ErrorAction SilentlyContinue
 $p = Start-Process -FilePath $exe -ArgumentList "`"$work`"" -WorkingDirectory $work -PassThru
 Start-Sleep -Seconds 8
 for ($i = 1; $i -lt 5; $i++) { Start-Process -FilePath $exe -ArgumentList "`"$work`"" -WorkingDirectory $work | Out-Null; Start-Sleep -Seconds 4 }
@@ -23,6 +23,6 @@ $claude = @($kids | Where-Object Name -eq 'claude.exe').Count
 $wv = $kids | Where-Object Name -eq 'msedgewebview2.exe'
 $wvMB = ($wv | ForEach-Object { PrivWS $_.ProcessId } | Measure-Object -Sum).Sum
 $cpu0 = (Get-Process -Id $p.Id).TotalProcessorTime.TotalMilliseconds; Start-Sleep -Seconds 10; $cpu1 = (Get-Process -Id $p.Id).TotalProcessorTime.TotalMilliseconds
-"[{0}] claude panes {1}; clayo private WS {2:N1} MB; WebView2 helpers {3} = {4:N1} MB; clayo CPU over 10 s idle {5:N0} ms" -f $label, $claude, (PrivWS $p.Id), @($wv).Count, $wvMB, ($cpu1-$cpu0)
+"[{0}] claude panes {1}; kiln private WS {2:N1} MB; WebView2 helpers {3} = {4:N1} MB; kiln CPU over 10 s idle {5:N0} ms" -f $label, $claude, (PrivWS $p.Id), @($wv).Count, $wvMB, ($cpu1-$cpu0)
 taskkill /T /F /PID $p.Id 2>$null | Out-Null
 Start-Sleep -Seconds 2

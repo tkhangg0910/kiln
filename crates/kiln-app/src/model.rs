@@ -1,0 +1,198 @@
+//! The sidebar's data, shared between the UI and the sessions thread.
+//!
+//! The sessions thread owns both transcript stores and their watchers. A settled change
+//! rescans on that thread and folds the result in here (RefreshSessions), so rows, Codex pane
+//! binding and Codex turn status keep up while the window is hidden and eframe calls no `ui`.
+
+use crate::pane::PaneShared;
+use kiln_core::paths::{DataDir, OsEnv};
+use kiln_core::sessions::claude::ClaudeStore;
+use kiln_core::sessions::codex::CodexStore;
+use kiln_core::sessions::watch::SessionSource;
+use kiln_core::sessions::SessionInfo;
+use kiln_core::sidebar::{bind_codex_panes, Sidebar, Waiting};
+use kiln_core::store::names::SessionNames;
+use kiln_core::store::parents::SessionParents;
+use std::collections::HashSet;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+pub struct Model {
+    pub sidebar: Sidebar,
+    pub names: SessionNames,
+    pub parents: SessionParents,
+    /// Codex panes waiting for their transcript, in start order.
+    pub waiting: Vec<Waiting>,
+    /// Open panes, the one used last first (the screenshot picker's order).
+    pub used: Vec<u64>,
+    /// Live panes, in start order.
+    pub panes: Vec<Arc<PaneShared>>,
+    /// Either agent's transcript folder exists (else the list shows the empty-state text).
+    pub roots_exist: bool,
+    pub use_claude: bool,
+    pub use_codex: bool,
+    /// Bumped on every change that can move rows, so the UI rebuilds its view only then.
+    pub generation: u64,
+}
+
+impl Model {
+    pub fn new(data: &DataDir, use_claude: bool, use_codex: bool) -> Self {
+        Self {
+            sidebar: Sidebar::new(),
+            names: SessionNames::open(data),
+            parents: SessionParents::open(data),
+            waiting: Vec::new(),
+            used: Vec::new(),
+            panes: Vec::new(),
+            roots_exist: true,
+            use_claude,
+            use_codex,
+            generation: 0,
+        }
+    }
+
+    pub fn pane(&self, id: u64) -> Option<&Arc<PaneShared>> {
+        self.panes.iter().find(|p| p.id == id)
+    }
+
+    /// RefreshSessions: bind waiting Codex panes first, so a transcript lands on its pane's row
+    /// instead of growing a second one; feed Codex turns to their panes; fold everything in.
+    pub fn apply_scan(&mut self, claude: Vec<SessionInfo>, codex: Vec<SessionInfo>, roots_exist: bool) {
+        let mut taken: HashSet<String> = self.panes.iter().filter_map(|p| p.session_id()).collect();
+        for (old, new) in bind_codex_panes(&mut self.waiting, &codex, &mut taken) {
+            let pane_id = self.sidebar.get(&old).and_then(|r| r.pane.as_ref()).map(|p| p.id);
+            self.sidebar.rekey(&old, &new);
+            if let Some(p) = pane_id.and_then(|id| self.pane(id)) {
+                p.set_session_id(Some(new));
+            }
+        }
+        // A Codex pane's working / done is exact in its transcript.
+        for info in &codex {
+            let Some(turn) = info.turn else { continue };
+            let pane = self.sidebar.get(&info.session_id).and_then(|r| r.pane.as_ref()).map(|p| p.id);
+            if let Some(p) = pane.and_then(|id| self.pane(id)) {
+                p.show_turn(turn, info.last_activity);
+            }
+        }
+        let both = self.use_claude && self.use_codex;
+        let mut infos = if self.use_claude { claude } else { Vec::new() };
+        if self.use_codex {
+            infos.extend(codex);
+        }
+        let names = &self.names;
+        self.sidebar.fold(infos, both, |id| names.get(id).map(String::from));
+        self.roots_exist = roots_exist;
+        self.generation += 1;
+    }
+}
+
+pub type Shared = Arc<Mutex<Model>>;
+
+pub fn lock(m: &Shared) -> MutexGuard<'_, Model> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// What the sessions thread is asked to do.
+pub enum Job {
+    Refresh,
+    Stop,
+}
+
+/// Starts the sessions thread: an immediate scan, then one per settled watcher change or
+/// [`Job::Refresh`]. `changed` runs after each fold (it wakes the UI).
+pub fn start_worker(model: Shared, changed: impl Fn() + Send + 'static) -> Sender<Job> {
+    let (tx, rx) = channel::<Job>();
+    let me = tx.clone();
+    std::thread::Builder::new()
+        .name("kiln-sessions".into())
+        .spawn(move || {
+            let env = OsEnv;
+            let mut claude = ClaudeStore::for_this_user(&env);
+            let mut codex = CodexStore::for_this_user(&env);
+            let _ = me.send(Job::Refresh);
+            for source in [&mut claude as &mut dyn SessionSource, &mut codex] {
+                let me = me.clone();
+                source.start_watching(Box::new(move || {
+                    let _ = me.send(Job::Refresh);
+                }));
+            }
+            while let Ok(job) = rx.recv() {
+                if matches!(job, Job::Stop) {
+                    break;
+                }
+                // Several changes queued while scanning are one refresh.
+                let mut stop = false;
+                while let Ok(more) = rx.try_recv() {
+                    stop |= matches!(more, Job::Stop);
+                }
+                if stop {
+                    break;
+                }
+                let (use_claude, use_codex) = {
+                    let m = lock(&model);
+                    (m.use_claude, m.use_codex)
+                };
+                let c = if use_claude { claude.scan() } else { Vec::new() };
+                let x = if use_codex { codex.scan() } else { Vec::new() };
+                let roots = claude.root_exists() || codex.root_exists();
+                lock(&model).apply_scan(c, x, roots);
+                // Each open pane's transcript, from where the last read stopped, off the lock.
+                let reads: Vec<(Arc<PaneShared>, std::path::PathBuf)> = {
+                    let m = lock(&model);
+                    m.panes
+                        .iter()
+                        .filter_map(|p| {
+                            let file = m.sidebar.by_pane(p.id)?.info.as_ref()?.file.clone()?;
+                            Some((p.clone(), file))
+                        })
+                        .collect()
+                };
+                for (pane, file) in reads {
+                    pane.read_transcript(&file);
+                }
+                changed();
+            }
+            claude.stop_watching();
+            codex.stop_watching();
+        })
+        .expect("spawn sessions thread");
+    tx
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// The sessions thread scans and folds with no UI at all (a hidden window calls no `ui`),
+    /// and a transcript written later reaches the rows through the watcher.
+    #[test]
+    fn worker_refreshes_rows_without_the_ui() {
+        let dir = tempfile::tempdir().unwrap();
+        let projects = dir.path().join("claude").join("projects").join("C--x");
+        std::fs::create_dir_all(&projects).unwrap();
+        let line = |id: &str| {
+            format!(r#"{{"type":"user","cwd":"C:\\x","sessionId":"{id}","message":{{"content":"hello {id}"}}}}"#)
+        };
+        std::fs::write(projects.join("a.jsonl"), line("aaaa")).unwrap();
+        // The only test in this crate touching the environment.
+        std::env::set_var("CLAUDE_CONFIG_DIR", dir.path().join("claude"));
+        std::env::set_var("CODEX_HOME", dir.path().join("codex"));
+        let model: Shared = Arc::new(Mutex::new(Model::new(&DataDir::new(dir.path().join("data")), true, true)));
+        let (tx, rx) = channel();
+        let jobs = start_worker(model.clone(), move || {
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(Duration::from_secs(10)).expect("first scan");
+        assert_eq!(lock(&model).sidebar.get("aaaa").map(|r| r.name().to_string()).as_deref(), Some("hello aaaa"));
+        assert!(lock(&model).roots_exist);
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(projects.join("b.jsonl"), line("bbbb")).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while lock(&model).sidebar.get("bbbb").is_none() {
+            assert!(std::time::Instant::now() < deadline, "watcher refresh");
+            let _ = rx.recv_timeout(Duration::from_millis(500));
+        }
+        let _ = jobs.send(Job::Stop);
+    }
+}

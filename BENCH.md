@@ -1,5 +1,8 @@
 # BENCH.md — Clayo Rust vs Clayo C# 1.0.6
 
+> **Kiln note.** Written for clayo-rust (the Rust port of Clayo) before the fork; there `clayo-*`
+> crates, `clayo.exe` and `%LOCALAPPDATA%\Clayo` are Kiln's `kiln-*`, `kiln.exe` and `%LOCALAPPDATA%\Kiln`.
+
 > **Layout note (clayo-rust).** This document was written in the original repository, where the Rust
 > workspace lived in `rust/` next to the C# app in `src/Clayo`. In clayo-rust the workspace is at the
 > repository root (`rust/crates/...` is now `crates/...`), the page assets are in `assets/pages`, and

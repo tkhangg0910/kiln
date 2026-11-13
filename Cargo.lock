@@ -593,73 +593,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clayo-app"
-version = "1.0.6"
-dependencies = [
- "chrono",
- "clayo-core",
- "clayo-island",
- "clayo-pty",
- "clayo-term",
- "eframe",
- "egui",
- "egui_commonmark",
- "embed-resource",
- "image",
- "memmap2",
- "raw-window-handle",
- "rfd",
- "tempfile",
- "wgpu",
- "windows",
-]
-
-[[package]]
-name = "clayo-core"
-version = "1.0.6"
-dependencies = [
- "chrono",
- "notify",
- "pulldown-cmark",
- "regex",
- "serde_json",
- "tempfile",
- "uuid",
- "winreg",
-]
-
-[[package]]
-name = "clayo-island"
-version = "1.0.6"
-dependencies = [
- "ab_glyph",
- "chrono",
- "clayo-core",
- "memmap2",
- "png",
- "tiny-skia",
- "windows",
- "windows-core",
-]
-
-[[package]]
-name = "clayo-pty"
-version = "1.0.6"
-dependencies = [
- "windows",
-]
-
-[[package]]
-name = "clayo-term"
-version = "1.0.6"
-dependencies = [
- "alacritty_terminal",
- "egui",
- "regex",
- "unicode-normalization",
-]
-
-[[package]]
 name = "codespan-reporting"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1678,6 +1611,73 @@ name = "khronos_api"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
+
+[[package]]
+name = "kiln-app"
+version = "1.0.6"
+dependencies = [
+ "chrono",
+ "eframe",
+ "egui",
+ "egui_commonmark",
+ "embed-resource",
+ "image",
+ "kiln-core",
+ "kiln-island",
+ "kiln-pty",
+ "kiln-term",
+ "memmap2",
+ "raw-window-handle",
+ "rfd",
+ "tempfile",
+ "wgpu",
+ "windows",
+]
+
+[[package]]
+name = "kiln-core"
+version = "1.0.6"
+dependencies = [
+ "chrono",
+ "notify",
+ "pulldown-cmark",
+ "regex",
+ "serde_json",
+ "tempfile",
+ "uuid",
+ "winreg",
+]
+
+[[package]]
+name = "kiln-island"
+version = "1.0.6"
+dependencies = [
+ "ab_glyph",
+ "chrono",
+ "kiln-core",
+ "memmap2",
+ "png",
+ "tiny-skia",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
+name = "kiln-pty"
+version = "1.0.6"
+dependencies = [
+ "windows",
+]
+
+[[package]]
+name = "kiln-term"
+version = "1.0.6"
+dependencies = [
+ "alacritty_terminal",
+ "egui",
+ "regex",
+ "unicode-normalization",
+]
 
 [[package]]
 name = "kqueue"

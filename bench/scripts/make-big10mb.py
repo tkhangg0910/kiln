@@ -1,6 +1,6 @@
 """Writes big10mb.txt (10 MiB of ASCII, Vietnamese and SGR colour) into the bench folder."""
 import os, random, sys
-d = os.environ.get("CLAYO_BENCH_DIR") or os.path.join(os.environ["TEMP"], "clayo-bench")
+d = os.environ.get("KILN_BENCH_DIR") or os.path.join(os.environ["TEMP"], "kiln-bench")
 os.makedirs(d, exist_ok=True)
 random.seed(1)
 with open(os.path.join(d, "big10mb.txt"), "w", encoding="utf-8", newline="\n") as f:

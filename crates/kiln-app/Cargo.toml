@@ -1,0 +1,42 @@
+[package]
+name = "kiln-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kiln"
+path = "src/main.rs"
+
+[build-dependencies]
+embed-resource = "3"
+
+[dependencies]
+kiln-core = { path = "../kiln-core" }
+kiln-pty = { path = "../kiln-pty" }
+kiln-term = { path = "../kiln-term" }
+kiln-island = { path = "../kiln-island" }
+eframe = { version = "0.37", default-features = false, features = ["glow", "accesskit", "wgpu_no_default_features"] }
+# The D10 fallback renderer: Direct3D 12 only (WARP when there is no GPU), no Vulkan or GL.
+wgpu = { version = "30", default-features = false, features = ["dx12", "wgsl", "std"] }
+egui = { version = "0.37" }
+memmap2 = "0.9"
+raw-window-handle = "0.6"
+chrono.workspace = true
+egui_commonmark = { version = "0.26", default-features = false, features = ["pulldown_cmark", "embedded_image", "load-images"] }
+# Pasted-image thumbnails and the doc viewer's images: these formats only.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+
+[target.'cfg(windows)'.dependencies]
+# Native Win32 file and folder dialogs (no GTK, no portal: those features are Linux-only).
+rfd = { version = "0.15", default-features = false }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Dwm", "Win32_System_DataExchange", "Win32_UI_Shell", "Win32_System_Memory", "Win32_UI_HiDpi", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Pipes", "Win32_System_IO", "Win32_Storage_FileSystem", "Win32_Networking_WinHttp", "Win32_System_LibraryLoader"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

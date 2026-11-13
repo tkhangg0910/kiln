@@ -9,11 +9,12 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # Actions are pinned to a commit, as a tag can be moved to other code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
+          persist-credentials: false
+      # Rust comes with the runner image; no third-party toolchain action.
+      - run: rustup update stable --no-self-update && rustup default stable && rustup component add clippy
       - run: cargo build --release
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test

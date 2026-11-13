@@ -1,6 +1,6 @@
-# Third-party notices — clayo-rust
+# Third-party notices — Kiln
 
-`clayo.exe` is MIT licensed (see `LICENSE`). It contains or links the following third-party work,
+`kiln.exe` is MIT licensed (see `LICENSE`). It contains or links the following third-party work,
 each under its own licence. The full licence texts are in each project's repository (and, for
 Rust crates, in the crate source on crates.io).
 

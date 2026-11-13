@@ -1,107 +1,78 @@
-# clayo-rust
+# Kiln
 
-A native Rust port of [Clayo](https://github.com/YogiOnCode/Clayo): every Claude Code and Codex
-session in one Windows window, plus an island that tells you which one needs you. Same behaviour
-as Clayo 1.0.6, without WebView2: one `clayo.exe`, no runtime to install.
+Every Claude Code and Codex session in one native Windows window, plus an island at the top of the
+screen that tells you which one needs you. One small `kiln.exe`, no WebView, no runtime.
 
-**Credit.** Clayo was created by **Yogeswaran Amsavalli** ([YogiOnCode/Clayo](https://github.com/YogiOnCode/Clayo)),
-MIT licensed. This port keeps that licence: see [`LICENSE`](LICENSE). The design, behaviour,
-texts, mascot and island are the original author's; the Rust code reimplements them.
-The Rust port is by [tkhangg0910](https://github.com/tkhangg0910); this repository keeps the full
-git history of the original C# project, so every original commit stays attributed to its author.
-Not affiliated with Anthropic or OpenAI.
+Kiln is the personal line of development of [tkhangg0910](https://github.com/tkhangg0910), forked
+from [clayo-rust](https://github.com/tkhangg0910/clayo-rust).
 
-| | Rust port | C# 1.0.6 |
-|---|---|---|
-| Start to first frame | ~150 ms | ~1 s (8.8 s first start) |
-| RAM, 1 pane | 33 MB | 80 MB + 144 MB WebView2 |
-| RAM, 5 panes | 48 MB | 65 MB + 345 MB WebView2 |
-| Install | one 18 MB exe | 135 MB, 260 files |
+## Credits
 
-Full numbers and how they were taken: [`BENCH.md`](BENCH.md). What maps to what, and every
-behaviour checked off against the C# source: [`PORTING.md`](PORTING.md).
+- **[Clayo](https://github.com/YogiOnCode/Clayo)** by **Yogeswaran Amsavalli** is the original app
+  (C#/WPF, MIT). Its design, behaviour, texts, mascot, icon and island are his work; Kiln starts
+  from them.
+- **[clayo-rust](https://github.com/tkhangg0910/clayo-rust)** is the native Rust port of Clayo
+  (MIT) that Kiln is forked from. Its full git history, including every original Clayo commit,
+  is kept in this repository.
+- Kiln is not affiliated with or endorsed by the Clayo project, Anthropic or OpenAI.
+
+The mascot and icon are still Clayo's (used under its MIT licence, with credit); Kiln will get its
+own.
 
 ## Requirements
 
 - Windows 10 or 11, 64-bit.
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex)
-  (the first-run setup window finds them, or installs one in a PowerShell window you can watch).
-- To build: Rust stable (1.85+) with the MSVC toolchain (`rustup default stable-x86_64-pc-windows-msvc`)
-  and the Visual Studio C++ build tools. `git` on PATH is used at run time for the branch/diff in
-  the pane header.
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex).
+- To build: Rust stable (1.85+) with the MSVC toolchain and the Visual Studio C++ build tools.
+  `git` on PATH is used at run time for the branch/diff in the pane header.
 
 ## Build
 
 ```powershell
-cargo build --release          # target\release\clayo.exe
-cargo test                     # all checks (the C# checks/*.cs, ported), ~430 tests
+cargo build --release          # target\release\kiln.exe
+cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-Workspace layout:
-
 | Crate | What it is |
 |---|---|
-| `clayo-core` | All logic with no UI: transcripts, sessions, status relay and store, settings, rules, island state machine, setup texts, login start, PATH, updater. Tested on its own. |
-| `clayo-pty` | ConPTY: spawn, read thread, write, resize, non-blocking teardown. |
-| `clayo-term` | VT parsing (`alacritty_terminal`), colours, key/mouse encoding, the egui terminal widget. |
-| `clayo-island` | The island: a layered Win32 window that never takes focus, glow, mascot, screenshot picker, drop target. |
-| `clayo-app` | `clayo.exe`: eframe/egui (OpenGL, Direct3D 12 fallback) main window, setup window, Settings. |
-| `bench` | `clayo-bench` and the scripts behind BENCH.md (not part of clayo.exe). |
+| `kiln-core` | All logic with no UI: transcripts, sessions, status relay and store, settings, rules, island state machine, setup texts, login start, PATH, updater. |
+| `kiln-pty` | ConPTY: spawn, read thread, write, resize, non-blocking teardown. |
+| `kiln-term` | VT parsing (`alacritty_terminal`), colours, key/mouse encoding, the egui terminal widget. |
+| `kiln-island` | The island: a layered Win32 window that never takes focus, glow, mascot, picker, drop target. |
+| `kiln-app` | `kiln.exe`: eframe/egui (OpenGL, Direct3D 12 fallback) main window, setup window, Settings. |
+| `bench` | `kiln-bench` and the scripts behind BENCH.md (not part of kiln.exe). |
 
 ## Install
 
-Once a release is published:
-
 ```powershell
-irm https://raw.githubusercontent.com/tkhangg0910/clayo-rust/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/tkhangg0910/kiln/main/scripts/install.ps1 | iex
 ```
 
-Or build it yourself: Build the release zip and install it with the same script as the C# build:
+(once a release is published), or build the zip yourself with `.\scripts\publish.ps1` and unzip it
+into `%LOCALAPPDATA%\Programs` (giving `%LOCALAPPDATA%\Programs\Kiln\kiln.exe`). Releases are built
+by GitHub Actions from a `v*` tag on `main`, with a build-provenance attestation:
+`gh attestation verify kiln-<version>-win-x64.zip --repo tkhangg0910/kiln`.
 
-```powershell
-.\scripts\publish.ps1      # publish\clayo-<version>-win-x64.zip + .sha256 (uploads nothing)
-```
+## Living next to Clayo
 
-Then either unzip it into `%LOCALAPPDATA%\Programs` (giving `%LOCALAPPDATA%\Programs\Clayo\clayo.exe`)
-and run `clayo.exe`, or attach the zip and its `.sha256` to a GitHub release and use
-[`scripts/install.ps1`](scripts/install.ps1), which checks the SHA-256 and swaps the folder.
-Keep `clayo.exe` in that folder: start at login and `clayo` in Explorer's address bar point at it.
+Kiln has its own data folder (`%LOCALAPPDATA%\Kiln`), single-instance lock, login-start entry and
+update channel, so it can be installed beside Clayo or clayo-rust. Both read the same Claude Code
+and Codex sessions (read only). Only one app at a time can own the Ctrl+Alt+S screenshot shortcut;
+the other reports it as taken in Settings › Island. To move your Clayo settings over, copy
+`%LOCALAPPDATA%\Clayo\settings.json`, `names.json` and `parents.json` into `%LOCALAPPDATA%\Kiln`.
 
-Updates: the Update button asks GitHub for the latest release of the repo set at build time
-(`CLAYO_UPDATE_REPO`, default `tkhangg0910/clayo-rust`). A fork that publishes its own releases
-builds with `$env:CLAYO_UPDATE_REPO = "<owner>/<repo>"` and points `scripts/install.ps1` at it.
-
-## Moving from the C# build
-
-Quit the C# Clayo from its gear menu, then install this one into the same folder. Your settings
-(`%LOCALAPPDATA%\Clayo\settings.json`), custom session names, branch links and screenshots are read
-as they are. The two builds share the single-instance lock, so they never run side by side.
-
-## Licence and credits
-
-MIT, see [`LICENSE`](LICENSE) (original author first, then the Rust port). Third-party crates and the
-embedded Chart.js / Mermaid files are listed with their licences in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Citation metadata: [`CITATION.cff`](CITATION.cff).
-
-## What Clayo touches
+## What Kiln touches
 
 - Reads only: `%USERPROFILE%\.claude` (or `%CLAUDE_CONFIG_DIR%`) and `%USERPROFILE%\.codex` (or
-  `%CODEX_HOME%`). It never writes there (`clayo-core/tests/invariants.rs`).
-- Writes its own files in `%LOCALAPPDATA%\Clayo` only; registry: `HKCU\...\Run` value `Clayo` and
-  the user `Path`, both from the setup window.
-- Network: only the GitHub releases check.
+  `%CODEX_HOME%`); never writes there.
+- Writes its own files in `%LOCALAPPDATA%\Kiln`; registry: `HKCU\...\Run` value `Kiln` and the user
+  `Path`, both from the setup window.
+- Network: only the GitHub releases check of `tkhangg0910/kiln`.
 
-## Differences from the C# build
+## Licence
 
-Agreed in PORTING.md §6: HTML pages a session writes open in your browser instead of beside the
-terminal (D3); Markdown docs show no remote images (D4); emoji are monochrome (D7); "Also apply to
-Codex" is read-only, because Clayo does not write into `~/.codex` (D1); the terminal cursor stops
-blinking after 5 s of quiet (D14).
-
-## Debugging hooks
-
-Environment variables read by `clayo.exe`: `CLAYO_STARTUP_LOG`, `CLAYO_FRAME_LOG`, `CLAYO_BENCH_TYPE`,
-`CLAYO_BENCH_AGENT_CMD` (benchmarks), and in debug builds `CLAYO_PTY_LOG`, `CLAYO_DEV_AGENT_CMD`,
-`CLAYO_DEV_SETTINGS`, `CLAYO_DEV_RENDERER`. Point `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and
-`LOCALAPPDATA` at temp folders to try a build without touching your real setup.
+MIT, see [`LICENSE`](LICENSE): the original Clayo copyright, then the Rust port's and Kiln's.
+Third-party crates and the embedded Chart.js / Mermaid files: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Citation metadata: [`CITATION.cff`](CITATION.cff). Background on the port: [`PORTING.md`](PORTING.md),
+[`BENCH.md`](BENCH.md) (written for clayo-rust; names there are Clayo's).

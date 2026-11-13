@@ -1,10 +1,10 @@
 [package]
-name = "clayo-bench"
+name = "kiln-bench"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
-# Standalone: not part of the clayo workspace, so it never ships in clayo.exe.
+# Standalone: not part of the kiln workspace, so it never ships in kiln.exe.
 [workspace]
 
 [dependencies]
