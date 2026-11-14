@@ -528,7 +528,7 @@ fn status_page(ui: &mut Ui, s: &mut KilnoSettings) {
             ],
         );
         field_group(ui, "Account", why_foot);
-        tick_row(ui, "account", w, &mut [("5-hour limit", &mut s.status_five_hour, head || foot), ("7-day limit", &mut s.status_seven_day, head || foot)]);
+        tick_row(ui, "account", w, &mut [("5-hour limit", &mut s.status_five_hour, head || foot), ("7-day limit", &mut s.status_seven_day, head || foot), ("Model weekly", &mut s.status_model_weekly, head || foot)]);
     });
     ui.add_space(6.0);
     card_end(ui, card);
@@ -552,7 +552,7 @@ fn status_page(ui: &mut Ui, s: &mut KilnoSettings) {
     let watch = s.reserve_at > 0;
     indented(ui, 6.0, |ui| {
         let w = ui.available_width() - 6.0;
-        tick_row(ui, "reserve", w, &mut [("5-hour limit", &mut s.reserve_five_hour, watch), ("7-day limit", &mut s.reserve_seven_day, watch)]);
+        tick_row(ui, "reserve", w, &mut [("5-hour limit", &mut s.reserve_five_hour, watch), ("7-day limit", &mut s.reserve_seven_day, watch), ("Model weekly", &mut s.reserve_model_weekly, watch)]);
     });
     ui.add_space(6.0);
     card_end(ui, card);

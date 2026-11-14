@@ -44,11 +44,12 @@ fn tint(b: Band, alpha: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (alpha * 255.0).round() as u8)
 }
 
-fn long_name(m: &Meter) -> &'static str {
-    if m.label == "5h" {
-        "5-hour"
-    } else {
-        "7-day"
+fn long_name(m: &Meter) -> &str {
+    match m.label.as_str() {
+        "5h" => "5-hour",
+        "7d" => "7-day",
+        // A model's own weekly limit: its name.
+        model => model,
     }
 }
 
@@ -261,6 +262,9 @@ pub fn draw_strip(ui: &mut Ui, strip: Option<&Strip>, theme: StatusTheme, x: f32
     if let Some(m) = &strip.seven_day {
         fields.push(meter(ui, m));
     }
+    for m in &strip.models {
+        fields.push(meter(ui, m));
+    }
 
     let clip = Rect::from_min_max(Pos2::new(x, cy - 16.0), Pos2::new(right, cy + 16.0));
     let painter = ui.painter().with_clip_rect(clip.intersect(ui.clip_rect()));
@@ -321,25 +325,38 @@ pub fn limits_height(ui: &Ui, meters: &[Meter], theme: StatusTheme) -> f32 {
     if meters.is_empty() {
         return 0.0;
     }
+    if theme == StatusTheme::Bars {
+        return meters.len() as f32 * row_h(ui, 12.0) + (meters.len() - 1) as f32 * 8.0;
+    }
+    // Two cells a row; a model's own weekly limit (Fable) starts a second.
+    let rows = meters.len().div_ceil(2) as f32;
+    rows * cell_height(ui, meters, theme) + (rows - 1.0) * ROW_GAP
+}
+
+/// Between rows of cells, when there are more than two limits.
+const ROW_GAP: f32 = 8.0;
+
+fn cell_height(ui: &Ui, meters: &[Meter], theme: StatusTheme) -> f32 {
     match theme {
-        StatusTheme::Numbers => row_h(ui, 12.0),
-        StatusTheme::Bars => meters.len() as f32 * row_h(ui, 12.0) + (meters.len() - 1) as f32 * 8.0,
         StatusTheme::Rings => 34.0,
         StatusTheme::Chips => {
             let reset = meters.iter().any(|m| m.reset.is_some());
             2.0 + 14.0 + row_h(ui, 15.0) + if reset { 1.0 + row_h(ui, 11.0) } else { 0.0 }
         }
+        _ => row_h(ui, 12.0),
     }
 }
 
 /// LimitsView: Numbers in two ruled columns, Bars as a row each, Rings and Chips as two cards
-/// side by side. `rect` is as tall as [`limits_height`].
+/// side by side; past two limits the cells go on in a second row. `rect` is as tall as
+/// [`limits_height`].
 pub fn draw_limits(ui: &mut Ui, rect: Rect, meters: &[Meter], theme: StatusTheme) {
     if meters.is_empty() {
         return;
     }
     let painter = ui.painter().with_clip_rect(rect.expand(1.0).intersect(ui.clip_rect()));
     let col_w = rect.width() / 2.0;
+    let cell_h = cell_height(ui, meters, theme);
     for (i, m) in meters.iter().enumerate() {
         let p = faded(&painter, m.stale);
         let cell = match theme {
@@ -351,8 +368,10 @@ pub fn draw_limits(ui: &mut Ui, rect: Rect, meters: &[Meter], theme: StatusTheme
             }
             _ => {
                 // The second column: Numbers rules it off 12 px either side; the cards keep a gap.
-                let mut r = Rect::from_min_size(Pos2::new(rect.left() + col_w * i as f32, rect.top()), Vec2::new(col_w, rect.height()));
-                if i > 0 {
+                let (row, col) = (i / 2, i % 2);
+                let top = rect.top() + row as f32 * (cell_h + ROW_GAP);
+                let mut r = Rect::from_min_size(Pos2::new(rect.left() + col_w * col as f32, top), Vec2::new(col_w, cell_h));
+                if col > 0 {
                     let gap = match theme {
                         StatusTheme::Rings => 10.0,
                         StatusTheme::Chips => 8.0,

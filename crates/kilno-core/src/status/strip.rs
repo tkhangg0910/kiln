@@ -1,7 +1,7 @@
 //! Turns what a session's status line was handed and its folder's git state into the pane
 //! header strip's and the sidebar footer's text. Which theme draws it is the view's business.
 
-use super::model::{AccountLimits, Limit, SessionStatus};
+use super::model::{AccountLimits, Limit, ModelLimit, SessionStatus};
 use crate::git::GitStatus;
 use crate::settings::KilnoSettings;
 use chrono::{DateTime, Utc};
@@ -51,6 +51,8 @@ pub struct Strip {
     pub effort: Option<String>,
     pub five_hour: Option<Meter>,
     pub seven_day: Option<Meter>,
+    /// The per-model weekly limits (Fable), after the 7-day.
+    pub models: Vec<Meter>,
 }
 
 /// The header strip, or None when there is nothing to show: no status yet, the header switched
@@ -89,6 +91,7 @@ pub fn header(
             settings.status_seven_day,
             limits.and_then(|l| l.seven_day.as_ref()),
         ),
+        models: if limits_here { model_meters(limits, settings, now) } else { Vec::new() },
     };
     (strip != Strip::default()).then_some(strip)
 }
@@ -133,6 +136,7 @@ pub fn footer(
     {
         meters.push(limit_meter(false, d7, now, reserve_for(settings, false)));
     }
+    meters.extend(model_meters(Some(limits), settings, now));
     meters
 }
 
@@ -143,6 +147,34 @@ pub fn limit_meter(five_hour: bool, limit: &Limit, now: DateTime<Utc>, reserve_a
     } else {
         ("7-day", "7d")
     };
+    meter(name, label, limit, now, reserve_at)
+}
+
+/// One model's weekly limit: labelled with the model's name ("Fable 32%"), told apart from
+/// the account's 7-day in the tooltip.
+pub fn model_meter(m: &ModelLimit, now: DateTime<Utc>, reserve_at: i32) -> Meter {
+    meter(&format!("{} weekly", m.model), &m.model, &m.limit, now, reserve_at)
+}
+
+/// The per-model weekly meters the settings ask for, in the server's order.
+fn model_meters(limits: Option<&AccountLimits>, settings: &KilnoSettings, now: DateTime<Utc>) -> Vec<Meter> {
+    let Some(limits) = limits.filter(|_| settings.status_model_weekly) else {
+        return Vec::new();
+    };
+    let reserve_at = model_reserve(settings);
+    limits.models.iter().map(|m| model_meter(m, now, reserve_at)).collect()
+}
+
+/// The reserve for the per-model weekly limits: 0 when they are not watched.
+pub fn model_reserve(s: &KilnoSettings) -> i32 {
+    if s.reserve_model_weekly {
+        s.reserve_at
+    } else {
+        0
+    }
+}
+
+fn meter(name: &str, label: &str, limit: &Limit, now: DateTime<Utc>, reserve_at: i32) -> Meter {
     // Limits only change when Claude refreshes its status line, so past the reset the number is
     // the old window's, not the current use.
     if is_stale(limit, now) {

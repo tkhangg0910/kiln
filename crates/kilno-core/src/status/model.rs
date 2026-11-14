@@ -15,11 +15,23 @@ impl Limit {
     }
 }
 
-/// The account's 5-hour and 7-day limits, and when they were last reported.
+/// A weekly limit one model has on top of the account's (Fable, on Team premium seats and Max
+/// plans): the server's label for the model, and the limit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelLimit {
+    pub model: String,
+    pub limit: Limit,
+}
+
+/// The account's 5-hour and 7-day limits, any per-model weekly ones, and when they were last
+/// reported.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AccountLimits {
     pub five_hour: Option<Limit>,
     pub seven_day: Option<Limit>,
+    /// Only Claude Code's saved usage reply has these ([`super::claude_usage`]); the status line
+    /// payload and Codex's transcripts never do.
+    pub models: Vec<ModelLimit>,
     pub updated: DateTime<Utc>,
 }
 

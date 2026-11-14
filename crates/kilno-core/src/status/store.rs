@@ -1,18 +1,21 @@
 //! Reads the status files the relay leaves in `<data dir>\status`, one per session, and keeps
 //! them fresh. Kilno only shows what Claude hands its status line (and, for the limits, what
-//! the user's own status line script saved).
+//! the user's own status line script saved, and the usage reply Claude Code saved for itself).
 
 use super::model::{AccountLimits, SessionStatus};
-use super::parse;
+use super::{claude_usage, parse};
 use chrono::{DateTime, Utc};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 /// A status file is written for every session ever opened; one quiet this long is gone.
 pub const KEEP_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
+/// A file's (modified time, length): changed when either is.
+type Stamp = (SystemTime, u64);
 
 type Listener = Arc<dyn Fn(&SessionStatus) + Send + Sync>;
 
@@ -26,6 +29,11 @@ struct Inner {
     dir: PathBuf,
     fallback_effort: Box<dyn Fn() -> String + Send + Sync>,
     usage_cache: PathBuf,
+    /// Claude Code's `.claude.json` ([`claude_usage`]), when set.
+    claude_json: Option<PathBuf>,
+    /// Its limits as of its last (modified time, length): a 200 kB file is not parsed again
+    /// every clock tick when Claude Code has not touched it.
+    claude_json_seen: Mutex<Option<(Stamp, Option<AccountLimits>)>>,
     by_id: Mutex<HashMap<String, SessionStatus>>,
     listeners: Mutex<Vec<Listener>>,
 }
@@ -43,11 +51,22 @@ impl StatusStore {
                 dir: dir.into(),
                 fallback_effort: Box::new(fallback_effort),
                 usage_cache: usage_cache.into(),
+                claude_json: None,
+                claude_json_seen: Mutex::new(None),
                 by_id: Mutex::new(HashMap::new()),
                 listeners: Mutex::new(Vec::new()),
             }),
             watcher: Mutex::new(None),
         }
+    }
+
+    /// Also read the usage reply Claude Code saves in `path` ([`claude_usage::path`]): the only
+    /// place the per-model weekly limits are found, and a fresher 5-hour and 7-day than a quiet
+    /// session's.
+    pub fn with_claude_json(mut self, path: impl Into<PathBuf>) -> Self {
+        let inner = Arc::get_mut(&mut self.inner).expect("set before the store is shared");
+        inner.claude_json = Some(path.into());
+        self
     }
 
     /// Called (on a background thread when it comes from the watcher) whenever a session's file
@@ -62,16 +81,21 @@ impl StatusStore {
             .cloned()
     }
 
-    /// The account's limits: the newest session report that has any, unless the user's script's
-    /// cache is newer (Claude wins a tie). Some accounts' Claude Code sends none at all.
+    /// The account's limits: the newest of a session report, the user's script's cache and
+    /// Claude Code's saved usage reply (on a tie, in that order). Some accounts' Claude Code
+    /// sends none in its reports at all. The per-model weekly limits come from the saved reply
+    /// whichever wins, as only it has them.
     pub fn limits(&self) -> Option<AccountLimits> {
         let from_claude = parse::newest(lock(&self.inner.by_id).values());
         let cached = read_usage_cache(&self.inner.usage_cache);
-        match (from_claude, cached) {
-            (c, None) => c,
-            (Some(c), Some(k)) if c.updated >= k.updated => Some(c),
-            (_, k) => k,
-        }
+        let saved = self.inner.claude_json();
+        let models = saved.as_ref().map(|s| s.models.clone()).unwrap_or_default();
+        let mut best = [from_claude, cached, saved]
+            .into_iter()
+            .flatten()
+            .reduce(|best, l| if l.updated > best.updated { l } else { best })?;
+        best.models = models;
+        Some(best)
     }
 
     /// Creates the folder, starts following `*.json` in it, prunes files quiet for
@@ -115,6 +139,29 @@ impl StatusStore {
 }
 
 impl Inner {
+    /// The saved usage reply's limits, parsed again only when the file changed.
+    fn claude_json(&self) -> Option<AccountLimits> {
+        let path = self.claude_json.as_deref()?;
+        let meta = std::fs::metadata(path).ok()?;
+        let stamp = (meta.modified().ok()?, meta.len());
+        let mut seen = lock(&self.claude_json_seen);
+        if let Some((s, limits)) = seen.as_ref() {
+            if *s == stamp {
+                return limits.clone();
+            }
+        }
+        // Claude Code rewrites this file often. One caught half-written keeps the last good
+        // limits and is not marked seen, so the next tick reads it again.
+        let read = std::fs::read(path).ok().map(|b| claude_usage::read(&String::from_utf8_lossy(&b)));
+        match read {
+            Some(Ok(limits)) => {
+                *seen = Some((stamp, limits.clone()));
+                limits
+            }
+            _ => seen.as_ref().and_then(|(_, l)| l.clone()),
+        }
+    }
+
     fn load(&self, path: &Path) {
         // std opens with share read|write|delete, so the relay's rename over this file still
         // succeeds while we read it.
