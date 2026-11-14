@@ -360,6 +360,15 @@ impl KilnoApp {
                 let w = waker.clone();
                 let _ = win::instance::serve(name, move |msg| w.send(AppEvent::Handoff(msg)));
             }
+            // The tray icon: Kilno runs on with its window closed. A click shows the window; its
+            // menu's Quit goes the island's way.
+            {
+                let (revealer, w) = (revealer.clone(), waker.clone());
+                win::tray::start(move |cmd| match cmd {
+                    win::tray::TrayCmd::Show => revealer.reveal(),
+                    win::tray::TrayCmd::Quit => w.send(AppEvent::Island(IslandCmd::Quit)),
+                });
+            }
             // Signing out ends the app as a real quit would, panes closed, rather than meeting
             // a close that only hides.
             if hwnd != 0 {
@@ -368,6 +377,7 @@ impl KilnoApp {
                     for p in lock(&m).panes.iter() {
                         p.kill();
                     }
+                    win::tray::remove();
                     std::process::exit(0);
                 });
             }
@@ -823,6 +833,8 @@ impl KilnoApp {
         lock(&self.model).panes.clear();
         self.status.stop();
         self.island.shutdown();
+        #[cfg(windows)]
+        win::tray::remove();
         // A hidden window gets no egui pass that would carry out the Close (the island's Quit
         // comes while hidden): end here, as main would after the event loop.
         if !self.shown {

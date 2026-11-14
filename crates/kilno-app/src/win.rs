@@ -9,6 +9,8 @@ pub mod http;
 pub mod instance;
 #[cfg(windows)]
 pub mod shell;
+#[cfg(windows)]
+pub mod tray;
 
 /// Map a font file read-only and keep it mapped for the life of the process. The bytes are
 /// file-backed, so they count as shared, not private, memory (PORTING.md §1 fonts).
