@@ -61,16 +61,7 @@ window finds your agents. Run the same line again to update. You can read
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    agents["Claude Code / Codex CLI"] -- "ConPTY" --> pty["kiln-pty"]
-    pty --> term["kiln-term<br>terminal emulator"]
-    term --> app["kiln-app<br>main window, Settings"]
-    files[("~/.claude, ~/.codex<br>transcripts")] -- "read only" --> core["kiln-core<br>sessions, status, rules"]
-    relay["status line relay<br>kiln --statusline"] --> core
-    core --> app
-    core --> island["kiln-island<br>top-of-screen overlay"]
-```
+<img src="docs/assets/architecture.svg" width="860" alt="Agents run in kiln-pty (ConPTY), drawn by kiln-term in kiln-app; kiln-core reads transcripts read-only and the status line relay, and drives kiln-app and kiln-island">
 
 ## Documentation
 
