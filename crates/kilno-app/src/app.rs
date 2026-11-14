@@ -103,7 +103,7 @@ fn start_visible(start: &Startup, setup_first: bool) -> bool {
 
 fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOptions {
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("K I L N")
+        .with_title("K I L N O")
         .with_inner_size([1280.0, 820.0])
         .with_min_inner_size([760.0, 420.0])
         // The exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.
