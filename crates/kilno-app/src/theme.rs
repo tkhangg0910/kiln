@@ -324,7 +324,7 @@ pub fn paint_switch(ui: &Ui, rect: Rect, id: egui::Id, on: bool, enabled: bool, 
     p.circle_filled(Pos2::new(x, rect.center().y), 6.0 * grow, knob.gamma_multiply(a));
 }
 
-/// The 16 px tick box (the Tick style): clay-washed with a clay mark when on; faint when disabled.
+/// The 16 px tick box (the Tick style): accent-washed with an accent mark when on; faint when disabled.
 pub fn tick_box(ui: &Ui, rect: Rect, on: bool, enabled: bool) {
     let p = ui.painter();
     let (bg, rim, mark) = match (on, enabled) {
