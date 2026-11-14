@@ -1,13 +1,13 @@
-"""Records the Kiln demo clips described in docs/demo/actions.yaml.
+"""Records the Kilno demo clips described in docs/demo/actions.yaml.
 
 Run inside .launchkit/venv:
   python scripts/launchkit/record.py              # all scenes, filmed
   python scripts/launchkit/record.py --dry-run    # all scenes, not filmed
   python scripts/launchkit/record.py --scene 03-island   # replays earlier scenes unfilmed, films this one
   python scripts/launchkit/record.py --screenshots       # runs the scenes and takes the README shots
-  python scripts/launchkit/record.py --inspect           # prints the UIA names of the Kiln window
+  python scripts/launchkit/record.py --inspect           # prints the UIA names of the Kilno window
 
-Kiln runs fully isolated (demo-data/env as its Claude, Codex and LocalAppData folders, USERPROFILE =
+Kilno runs fully isolated (demo-data/env as its Claude, Codex and LocalAppData folders, USERPROFILE =
 D:\\dev). Each clip is docs/demo/raw/<scene>.mp4 (work area, 60 fps, H.264 crf 16 preset slow) plus
 <scene>.events.json (t_ms from the first frame, type, x, y in video pixels, target, zoom). The mouse
 pointer is not captured; the editor redraws it from the move events.
@@ -27,7 +27,7 @@ D = os.path.join(REPO, "demo-data")
 RAW = os.path.join(REPO, "docs", "demo", "raw")
 ASSETS = os.path.join(REPO, "docs", "assets")
 LOG = os.path.join(REPO, ".launchkit", "LOG.md")
-KILN = os.path.join(REPO, "target", "debug", "kiln.exe")
+KILNO = os.path.join(REPO, "target", "debug", "kilno.exe")
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 SCREEN_W = win32api.GetSystemMetrics(0)
 
@@ -100,7 +100,7 @@ class Demo:
     def __init__(self, cfg, film, screenshots):
         self.cfg, self.film, self.screenshots = cfg, film, screenshots
         self.sessions = json.load(open(os.path.join(D, "sessions.json")))
-        self.kiln = self.app = self.win = None
+        self.kilno = self.app = self.win = None
         self.edge = self.edge_win = None
         self.consoles = []
         self.rec = Recorder("none", cfg["common"]["region"], False)
@@ -108,24 +108,24 @@ class Demo:
                         CLAUDE_CONFIG_DIR=os.path.join(D, "env", "claude"), CODEX_HOME=os.path.join(D, "env", "codex"),
                         LOCALAPPDATA=os.path.join(D, "env", "local"), CLAUDE_CODE_TMPDIR=os.path.join(D, "env", "tmp"),
                         USERPROFILE=r"D:\dev", HOMEDRIVE="D:", HOMEPATH=r"\dev",
-                        KILN_DEV_AGENT_CMD="demo-agent {id}", KILN_DEMO_EXE=KILN,
-                        KILN_DEMO_ROOT=os.path.join(D, "agent"),
+                        KILNO_DEV_AGENT_CMD="demo-agent {id}", KILNO_DEMO_EXE=KILNO,
+                        KILNO_DEMO_ROOT=os.path.join(D, "agent"),
                         PATH=os.path.join(D, "bin") + ";" + os.environ["PATH"])
 
     # ---------- windows ----------
-    def launch_kiln(self, size):
-        if self.kiln and self.kiln.poll() is None:
+    def launch_kilno(self, size):
+        if self.kilno and self.kilno.poll() is None:
             return
-        self.kiln = subprocess.Popen([KILN], cwd=os.path.dirname(KILN), env=self.env)
-        self.app = Application(backend="uia").connect(process=self.kiln.pid, timeout=20)
+        self.kilno = subprocess.Popen([KILNO], cwd=os.path.dirname(KILNO), env=self.env)
+        self.app = Application(backend="uia").connect(process=self.kilno.pid, timeout=20)
         spec = self.app.window(title=self.cfg["common"]["window_title"])
         spec.wait("visible", timeout=20)
         self.win = spec.wrapper_object()  # bound to the HWND, found once
         time.sleep(1.0)
         self.win.maximize()
-        self.focus_kiln()
+        self.focus_kilno()
 
-    def focus_kiln(self):
+    def focus_kilno(self):
         self.win.restore() if self.win.is_minimized() else None
         self.win.set_focus()
         win32gui.ShowWindow(self.win.handle, win32con.SW_MAXIMIZE)
@@ -271,13 +271,13 @@ class Demo:
         for st in steps:
             (op, arg), = st.items()
             if op == "launch":
-                self.launch_kiln(arg.get("size"))
+                self.launch_kilno(arg.get("size"))
             elif op == "terminals":
                 self.terminals(arg["count"], arg["projects"], arg["ask_after"])
             elif op == "browser":
                 self.browser(arg["url"])
             elif op == "focus":
-                self.focus_kiln()
+                self.focus_kilno()
             elif op == "clipboard_image":
                 if arg and arg.get("label"):
                     x, y = self.resolve(arg["at"])
@@ -327,7 +327,7 @@ class Demo:
 
     def open_row(self, session):
         """Activate a session's pane again: it is the first row under Open after a search reset."""
-        self.focus_kiln()
+        self.focus_kilno()
 
     def shot(self, arg):
         from PIL import ImageGrab
@@ -365,7 +365,7 @@ class Demo:
 
     def close(self):
         self.close_terminals()
-        for p in (self.kiln, self.edge):
+        for p in (self.kilno, self.edge):
             if p and p.poll() is None:
                 subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
 
@@ -395,7 +395,7 @@ def main():
     demo = Demo(cfg, film=not a.dry_run, screenshots=a.screenshots)
     try:
         if a.inspect:
-            demo.launch_kiln(None)
+            demo.launch_kilno(None)
             for c in demo.win.descendants():
                 if c.window_text():
                     print(c.element_info.control_type, repr(c.window_text()[:80]), c.rectangle())

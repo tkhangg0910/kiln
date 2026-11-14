@@ -10,18 +10,18 @@ Open Settings › Agents. The setup window finds Claude Code and Codex on PATH, 
 or lets you pick the binary (saved as `claudePath` / `codexPath`).
 
 **A session is missing from the sidebar.**
-Kiln lists what is in `%USERPROFILE%\.claude` and `%USERPROFILE%\.codex`. If you moved them, set
-`CLAUDE_CONFIG_DIR` / `CODEX_HOME` before starting Kiln. Check that the agent is switched on in
+Kilno lists what is in `%USERPROFILE%\.claude` and `%USERPROFILE%\.codex`. If you moved them, set
+`CLAUDE_CONFIG_DIR` / `CODEX_HOME` before starting Kilno. Check that the agent is switched on in
 Settings › Agents.
 
 **No branch or diff in the pane header.**
 That needs `git` on PATH and a folder inside a git repository.
 
 **The window does not open; only the island shows.**
-Kiln was started with `--background` (start at login). Run `%LOCALAPPDATA%\Programs\Kiln\kiln.exe`
+Kilno was started with `--background` (start at login). Run `%LOCALAPPDATA%\Programs\Kilno\kilno.exe`
 again to show the window.
 
-**Kiln crashed or starts slowly.**
-Crash details go to `%LOCALAPPDATA%\Kiln\crash.log`. For start-up timing, run it once with
-`KILN_STARTUP_LOG=<file>` set. Attach both when you
-[open an issue](https://github.com/tkhangg0910/kiln/issues).
+**Kilno crashed or starts slowly.**
+Crash details go to `%LOCALAPPDATA%\Kilno\crash.log`. For start-up timing, run it once with
+`KILNO_STARTUP_LOG=<file>` set. Attach both when you
+[open an issue](https://github.com/tkhangg0910/kilno/issues).

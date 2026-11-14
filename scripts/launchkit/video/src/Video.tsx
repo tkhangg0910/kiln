@@ -44,7 +44,7 @@ const Title: React.FC<{ dur: number }> = ({ dur }) => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: o, transform: `translateY(${y}px)` }}>
       <Img src={staticFile("logo.png")} style={{ width: 132, height: 132, imageRendering: "pixelated", marginBottom: 26 }} />
-      <div style={{ font: `700 120px ${T.font}`, color: T.text, letterSpacing: "-2px" }}>Kiln</div>
+      <div style={{ font: `700 120px ${T.font}`, color: T.text, letterSpacing: "-2px" }}>Kilno</div>
       <div style={{ font: `500 46px ${T.font}`, color: T.muted, marginTop: 10 }}>Every Claude Code and Codex session, one window</div>
     </AbsoluteFill>
   );
@@ -59,10 +59,10 @@ const Outro: React.FC<{ dur: number }> = ({ dur }) => {
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: o }}>
       <div style={{ display: "flex", alignItems: "center", gap: 36, transform: `scale(${sc})` }}>
         <Img src={staticFile("logo.png")} style={{ width: 150, height: 150, imageRendering: "pixelated" }} />
-        <div style={{ font: `700 150px ${T.font}`, color: T.text, letterSpacing: "-3px" }}>Kiln</div>
+        <div style={{ font: `700 150px ${T.font}`, color: T.text, letterSpacing: "-3px" }}>Kilno</div>
       </div>
       <div style={{ font: `600 58px ${T.font}`, color: T.text, marginTop: 34, opacity: lineO }}>Never miss an agent waiting on you.</div>
-      <div style={{ font: `500 40px ${T.font}`, color: T.clay, marginTop: 26, opacity: lineO }}>github.com/tkhangg0910/kiln</div>
+      <div style={{ font: `500 40px ${T.font}`, color: T.clay, marginTop: 26, opacity: lineO }}>github.com/tkhangg0910/kilno</div>
       <div style={{ font: `400 34px ${T.font}`, color: T.muted, marginTop: 40, opacity: lineO * 0.9 }}>
         Windows 10/11 · MIT · forked from clayo-rust, a Rust port of Clayo
       </div>

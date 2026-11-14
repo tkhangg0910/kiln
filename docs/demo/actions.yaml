@@ -2,9 +2,9 @@
 # order; each scene starts from the state the previous one left).
 #
 # Targets, in order of preference:
-#   name:<regex>[:<ControlType>]  a UIA element of the Kiln window, matched on its accessible name.
+#   name:<regex>[:<ControlType>]  a UIA element of the Kilno window, matched on its accessible name.
 #                    egui exposes widgets through AccessKit; a button's name is its tooltip text.
-#   point:[x, y]     a point relative to the Kiln window's client area. Used only where there is no
+#   point:[x, y]     a point relative to the Kilno window's client area. Used only where there is no
 #                    UIA element (reason on each step): egui list rows, popup menus, the Settings
 #                    page body and the terminal have no accessible names.
 #   island:[dx, dy]  a point on the island, relative to the top centre of the screen (the island is
@@ -33,7 +33,7 @@ scenes:
 
   - scene: 02-one-window
     setup:
-      - launch: { app: kiln, size: [1920, 1008] }
+      - launch: { app: kilno, size: [1920, 1008] }
       - wait: 2.0
     steps:
       - hold: 0.8
@@ -65,7 +65,7 @@ scenes:
 
   - scene: 04-answer
     setup:
-      - focus: kiln
+      - focus: kilno
     steps:
       - hold: 0.6
       # The terminal has no UIA children: click inside it to give it focus.
@@ -79,7 +79,7 @@ scenes:
 
   - scene: 13-doc-chip
     setup:
-      - focus: kiln
+      - focus: kilno
       - wait: 0.5
     steps:
       - hold: 0.5
@@ -91,7 +91,7 @@ scenes:
 
   - scene: 06-status
     setup:
-      - focus: kiln
+      - focus: kilno
     steps:
       - hold: 0.5
       - move: { target: "name:^Model$", zoom: 1.8 }
@@ -103,7 +103,7 @@ scenes:
 
   - scene: 05-screenshot
     setup:
-      - focus: kiln
+      - focus: kilno
       - click_silent: "name:Click to read it here"    # close the doc viewer again
       - browser: { url: "site/index.html" }
       - wait: 1.0
@@ -124,7 +124,7 @@ scenes:
   # ---- full video only ----
   - scene: 10-new-session
     setup:
-      - focus: kiln
+      - focus: kilno
     steps:
       - hold: 0.6
       - click: { target: "name:^Pick the folder to start in", zoom: 1.5 }
@@ -139,7 +139,7 @@ scenes:
 
   - scene: 11-search-resume
     setup:
-      - focus: kiln
+      - focus: kilno
     steps:
       - hold: 0.5
       - click: { target: "name:^$:Edit", zoom: 1.5 }
@@ -154,7 +154,7 @@ scenes:
 
   - scene: 12-branch
     setup:
-      - focus: kiln
+      - focus: kilno
       - clear_search: true
     steps:
       - hold: 0.5
@@ -165,7 +165,7 @@ scenes:
 
   - scene: 14-settings
     setup:
-      - focus: kiln
+      - focus: kilno
       # Back to "Dark mode for the settings page" (first row under Open; no AccessKit name).
       - click_silent: "point:[209, 290]"
     steps:

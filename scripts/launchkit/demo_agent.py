@@ -1,24 +1,24 @@
-"""Stand-in coding agent for the Kiln demo recordings (not part of Kiln).
+"""Stand-in coding agent for the Kilno demo recordings (not part of Kilno).
 
-A real demo would need a signed-in Claude Code account; this script plays an agent in a Kiln
+A real demo would need a signed-in Claude Code account; this script plays an agent in a Kilno
 pane instead, with its own neutral look. It:
-  - prints the kind of progress an agent prints (in bursts, so Kiln sees work),
-  - asks "Do you want to ...?" when it needs approval (Kiln's needs-you marker),
-  - appends its transcript where Kiln reads Claude sessions (CLAUDE_CONFIG_DIR\\projects),
-  - reports model / context / limits through Kiln's own relay (`kiln.exe --statusline`),
+  - prints the kind of progress an agent prints (in bursts, so Kilno sees work),
+  - asks "Do you want to ...?" when it needs approval (Kilno's needs-you marker),
+  - appends its transcript where Kilno reads Claude sessions (CLAUDE_CONFIG_DIR\\projects),
+  - reports model / context / limits through Kilno's own relay (`kilno.exe --statusline`),
   - takes commands from a control file so the recorder can time each scene:
       demo-data/ctl/<session-id>.txt  ->  work | ask | finish | doc | idle
 Keys typed in the pane are read too: a line ending in Enter is a new prompt, "1"/"2" answer a
 question, and a bracketed paste of an image path becomes "[Image #n]".
 
-Usage (typed by Kiln through KILN_DEV_AGENT_CMD):  demo-agent <session-id>
+Usage (typed by Kilno through KILNO_DEV_AGENT_CMD):  demo-agent <session-id>
 """
 import json, msvcrt, os, random, re, shutil, subprocess, sys, time
 from datetime import datetime, timedelta, timezone
 
-ROOT = os.environ.get("KILN_DEMO_ROOT", os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.environ.get("KILNO_DEMO_ROOT", os.path.dirname(os.path.abspath(__file__)))
 SCEN = json.load(open(os.path.join(ROOT, "scenarios.json"), encoding="utf-8"))
-KILN = os.environ.get("KILN_DEMO_EXE", "")
+KILNO = os.environ.get("KILNO_DEMO_EXE", "")
 IMG = re.compile(r"(?:\x1b\[200~)?[A-Za-z]:\\[^\r\n\x1b]*?\.(?:png|jpe?g|gif|webp|bmp)(?:\x1b\[201~)?", re.I)
 
 E = "\x1b["
@@ -58,8 +58,8 @@ def transcript(obj):
 
 
 def status():
-    """One status-line report through Kiln's relay, as Claude Code's status line would send."""
-    if not KILN or plain:
+    """One status-line report through Kilno's relay, as Claude Code's status line would send."""
+    if not KILNO or plain:
         return
     resets5 = int((datetime.now(timezone.utc) + timedelta(hours=2, minutes=14)).timestamp())
     resets7 = int((datetime.now(timezone.utc) + timedelta(days=3, hours=6)).timestamp())
@@ -75,7 +75,7 @@ def status():
                         "seven_day": {"used_percentage": SCEN.get("seven_day", 21), "resets_at": resets7}},
     }
     try:
-        subprocess.run([KILN, "--statusline"], input=json.dumps(payload).encode(), timeout=5,
+        subprocess.run([KILNO, "--statusline"], input=json.dumps(payload).encode(), timeout=5,
                        creationflags=0x08000000)
     except Exception:
         pass
@@ -252,7 +252,7 @@ def main():
             if asked and ch in "12":
                 asked = False
                 # Replace the question block with the answer, as TUI agents do: the question
-                # text must not stay on screen (a repaint would show it to Kiln again).
+                # text must not stay on screen (a repaint would show it to Kilno again).
                 sys.stdout.write(E + "5F" + E + "J")
                 out(f"  {GREEN}✓{RESET} {GREY}{'Approved: ' if ch == '1' else 'Declined: '}{sc.get('question', 'apply these changes?')}{RESET}")
                 if ch == "1":

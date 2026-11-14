@@ -1,9 +1,9 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below, together with Clayo and clayo-rust."
-title: "Kiln"
+title: "Kilno"
 type: software
 license: MIT
-repository-code: "https://github.com/tkhangg0910/kiln"
+repository-code: "https://github.com/tkhangg0910/kilno"
 authors:
   - alias: "tkhangg0910"
   - name: "Yogeswaran Amsavalli"

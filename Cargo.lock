@@ -1613,7 +1613,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
-name = "kiln-app"
+name = "kilno-app"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -1622,10 +1622,10 @@ dependencies = [
  "egui_commonmark",
  "embed-resource",
  "image",
- "kiln-core",
- "kiln-island",
- "kiln-pty",
- "kiln-term",
+ "kilno-core",
+ "kilno-island",
+ "kilno-pty",
+ "kilno-term",
  "memmap2",
  "raw-window-handle",
  "rfd",
@@ -1635,7 +1635,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-core"
+name = "kilno-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -1649,12 +1649,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-island"
+name = "kilno-island"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
  "chrono",
- "kiln-core",
+ "kilno-core",
  "memmap2",
  "png",
  "tiny-skia",
@@ -1663,14 +1663,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-pty"
+name = "kilno-pty"
 version = "0.1.0"
 dependencies = [
  "windows",
 ]
 
 [[package]]
-name = "kiln-term"
+name = "kilno-term"
 version = "0.1.0"
 dependencies = [
  "alacritty_terminal",

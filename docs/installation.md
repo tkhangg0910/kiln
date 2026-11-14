@@ -3,43 +3,43 @@
 ## Prerequisites
 
 - Windows 10 or 11, 64-bit.
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex) (see [AGENTS.md](AGENTS.md); Kiln's setup window can install or locate them).
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex) (see [AGENTS.md](AGENTS.md); Kilno's setup window can install or locate them).
 - `git` on PATH (used at run time for the branch/diff in the pane header).
 - To build from source: Rust stable 1.85+ with the MSVC toolchain and the Visual Studio C++ build tools.
 
 ## Install a release
 
 ```powershell
-irm https://raw.githubusercontent.com/tkhangg0910/kiln/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/tkhangg0910/kilno/main/scripts/install.ps1 | iex
 ```
 
-This installs or updates into `%LOCALAPPDATA%\Programs\Kiln` and starts Kiln. If Kiln is running when you run it by hand, the script stops and asks you to quit first. Settings in `%LOCALAPPDATA%\Kiln` are kept.
+This installs or updates into `%LOCALAPPDATA%\Programs\Kilno` and starts Kilno. If Kilno is running when you run it by hand, the script stops and asks you to quit first. Settings in `%LOCALAPPDATA%\Kilno` are kept.
 
 Verify a downloaded zip (built by GitHub Actions with a build-provenance attestation):
 
 ```powershell
-gh attestation verify kiln-<version>-win-x64.zip --repo tkhangg0910/kiln
+gh attestation verify kilno-<version>-win-x64.zip --repo tkhangg0910/kilno
 ```
 
 ## Build from source
 
 ```powershell
-git clone https://github.com/tkhangg0910/kiln.git
-cd kiln
-cargo build --release     # target\release\kiln.exe
+git clone https://github.com/tkhangg0910/kilno.git
+cd kilno
+cargo build --release     # target\release\kilno.exe
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-Run `target\release\kiln.exe`. No environment variables or database are needed.
+Run `target\release\kilno.exe`. No environment variables or database are needed.
 
 ## Build the release zip
 
 ```powershell
-.\scripts\publish.ps1     # publish\kiln-<version>-win-x64.zip and .sha256
+.\scripts\publish.ps1     # publish\kilno-<version>-win-x64.zip and .sha256
 ```
 
-The version comes from `[workspace.package]` in `Cargo.toml`. Unzip into `%LOCALAPPDATA%\Programs` to get `%LOCALAPPDATA%\Programs\Kiln\kiln.exe`.
+The version comes from `[workspace.package]` in `Cargo.toml`. Unzip into `%LOCALAPPDATA%\Programs` to get `%LOCALAPPDATA%\Programs\Kilno\kilno.exe`.
 
 ## Releasing
 

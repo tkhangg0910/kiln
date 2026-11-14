@@ -1,9 +1,9 @@
 param([string]$exe, [string]$label, [int]$panes = 5)
 # 1) A 10 MB `type` in one pane while the UI thread is probed every 50 ms (WM_NULL with timeout).
 # 2) $panes panes (via the single-instance handoff), each having printed the 10 MB file (full
-#    scrollback), then idle: private working set of the kiln process.
-$S = if ($env:KILN_BENCH_DIR) { $env:KILN_BENCH_DIR } else { Join-Path $env:TEMP "kiln-bench" }
-foreach ($x in "run\work","run\claude","run\codex","run\lad\Kiln") { New-Item -ItemType Directory -Force (Join-Path $S $x) | Out-Null }
+#    scrollback), then idle: private working set of the kilno process.
+$S = if ($env:KILNO_BENCH_DIR) { $env:KILNO_BENCH_DIR } else { Join-Path $env:TEMP "kilno-bench" }
+foreach ($x in "run\work","run\claude","run\codex","run\lad\Kilno") { New-Item -ItemType Directory -Force (Join-Path $S $x) | Out-Null }
 Add-Type @"
 using System; using System.Runtime.InteropServices;
 public class P {
@@ -15,8 +15,8 @@ public class P {
 function PrivWS($proc) { $c = New-Object P+PMC; $c.cb = [uint32][Runtime.InteropServices.Marshal]::SizeOf($c); [P]::GetProcessMemoryInfo($proc.Handle, [ref]$c, $c.cb) | Out-Null; [math]::Round($c.PrivateWS.ToUInt64()/1MB,1) }
 $work = "$S\run\work"
 $env:CLAUDE_CONFIG_DIR = "$S\run\claude"; $env:LOCALAPPDATA = "$S\run\lad"; $env:CODEX_HOME = "$S\run\codex"
-$env:KILN_BENCH_AGENT_CMD = "cmd /c type `"$S\big10mb.txt`""
-Remove-Item Env:KILN_BENCH_TYPE -ErrorAction SilentlyContinue
+$env:KILNO_BENCH_AGENT_CMD = "cmd /c type `"$S\big10mb.txt`""
+Remove-Item Env:KILNO_BENCH_TYPE -ErrorAction SilentlyContinue
 
 $p = Start-Process -FilePath $exe -ArgumentList "`"$work`"" -WorkingDirectory $work -PassThru
 $t = [Diagnostics.Stopwatch]::StartNew()
