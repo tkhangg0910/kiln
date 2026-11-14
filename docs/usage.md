@@ -14,7 +14,7 @@ kilno.exe [folder] [--background]
 ## Main flows
 
 1. First launch: the setup window finds Claude Code and/or Codex, can install or sign in, and lets you choose the default. Reopen it with Settings > Agents.
-2. The sidebar lists sessions by project for both agents (rows tagged CC / CX when both are used). Start a new session, resume one, or branch from one.
+2. The sidebar lists sessions by project for both agents (each row marked with its agent's logo when both are used). Start a new session, resume one, or branch from one.
 3. Each pane header shows model, branch, context and effort; a status light shows working, done or needs you.
 4. The island at the top of the screen announces when a session needs you or is done, offers a picker, and accepts dropped files.
 5. Closing the window only hides it; quit from the gear menu.

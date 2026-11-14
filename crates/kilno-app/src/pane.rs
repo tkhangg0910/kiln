@@ -170,7 +170,37 @@ impl PaneShared {
             p.take();
         }
     }
+
+    /// Ctrl+C twice, as a user quits Claude Code or Codex: the agent ends cleanly. Killed mid
+    /// start-up instead, Claude Code counts a failed launch and, after two, turns its fullscreen
+    /// renderer off. At a shell prompt it only starts a new line.
+    pub fn ask_to_quit(&self) {
+        self.write(b"\x03");
+        // Claude Code takes a second Ctrl+C only after it has shown "Press Ctrl-C again to
+        // exit"; one 150 ms after the first was ignored (measured).
+        std::thread::sleep(Duration::from_millis(600));
+        self.write(b"\x03");
+    }
+
+    /// [`ask_to_quit`](Self::ask_to_quit), then [`kill`](Self::kill) after [`QUIT_GRACE`], on a
+    /// thread of its own so the UI goes on at once.
+    pub fn close(self: &Arc<Self>) {
+        let me = Arc::clone(self);
+        let _ = std::thread::Builder::new().name("pane close".into()).spawn(move || {
+            me.ask_to_quit();
+            std::thread::sleep(QUIT_GRACE);
+            me.kill();
+        });
+    }
 }
+
+/// How long an agent gets to quit after the second Ctrl+C before its shell is killed (Claude
+/// Code took 1.2 s to exit, measured).
+// shortcut: a fixed wait, not the agent's exit (only the shell's exit is seen); measure if it cuts agents off.
+pub const QUIT_GRACE: Duration = Duration::from_millis(1500);
+
+/// From [`PaneShared::close`] to the shell being killed.
+pub const CLOSE_TIME: Duration = Duration::from_millis(600 + 1500);
 
 /// What an open pane's transcript says the session wrote (the doc, page and image chips).
 #[derive(Default)]
@@ -379,7 +409,7 @@ impl Pane {
 
 impl Drop for Pane {
     fn drop(&mut self) {
-        self.shared.kill();
+        self.shared.close();
     }
 }
 

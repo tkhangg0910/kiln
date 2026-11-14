@@ -1,6 +1,7 @@
 //! `kilno.exe`: every Claude Code and Codex session in one window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_logo;
 mod app;
 mod fonts;
 mod image_chip;
@@ -87,6 +88,8 @@ fn main() {
     }
 
     let code = app::run(app::Startup { background: start.background, folder: start.folder });
+    #[cfg(windows)]
+    win::tray::remove();
     // Hard exit: no stray thread (a PTY reader, a watcher) may keep the process alive, and with
     // it the single-instance mutex.
     std::process::exit(code);

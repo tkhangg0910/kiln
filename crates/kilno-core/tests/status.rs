@@ -578,3 +578,50 @@ fn relay_settings_file() {
         "same content, not rewritten"
     );
 }
+
+/// Claude Code's saved usage reply (`.claude.json`): the only source of a model's own weekly
+/// limit (Fable), kept whichever source wins the 5-hour and 7-day, and a half-written file
+/// keeps what was last read.
+#[test]
+fn store_with_claude_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    let at = at();
+    let claude_json = d.join(".claude.json");
+    let saved = |fetched: DateTime<Utc>, fable: i32| {
+        format!(
+            r#"{{"oauthAccount":{{"accountUuid":"aa","emailAddress":"x@example.com"}},
+              "cachedUsageUtilization":{{"fetchedAtMs":{},"accountUuid":"aa","utilization":{{
+                "five_hour":{{"utilization":3,"resets_at":null}},
+                "seven_day":{{"utilization":40,"resets_at":null}},
+                "limits":[{{"kind":"weekly_scoped","percent":{fable},"resets_at":null,
+                  "scope":{{"model":{{"display_name":"Fable"}}}}}}]}}}}}}"#,
+            fetched.timestamp_millis()
+        )
+    };
+    let store = StatusStore::new(d, || "medium".into(), d.join("no-usage-cache.json")).with_claude_json(&claude_json);
+    store.start().unwrap();
+    assert_eq!(store.limits(), None, "no file, no limits");
+
+    write(&claude_json, &saved(at, 32), at);
+    let l = store.limits().expect("from the saved reply");
+    assert_eq!((l.seven_day.map(|l| l.percent), l.models[0].limit.percent), (Some(40), 32));
+
+    // A newer session report wins the 7-day; Fable still comes from the saved reply.
+    let s = write(&d.join(format!("{A}.json")), &BUSY.replace(ID, A), at + Duration::minutes(1));
+    store.load(&s);
+    let l = store.limits().unwrap();
+    assert_eq!(l.seven_day.map(|l| l.percent), Some(9), "the newer report");
+    assert_eq!(l.models[0].model, "Fable", "the model limit stays");
+
+    // Rewritten (new stamp): read again.
+    write(&claude_json, &saved(at, 47), at + Duration::minutes(2));
+    assert_eq!(store.limits().unwrap().models[0].limit.percent, 47);
+    // Caught half-written: the last good limits stay.
+    let full = saved(at, 50);
+    write(&claude_json, &full[..full.len() / 2], at + Duration::minutes(3));
+    assert_eq!(store.limits().unwrap().models[0].limit.percent, 47);
+    // Signed in as someone else: the old account's numbers go.
+    write(&claude_json, &saved(at, 47).replacen(r#""accountUuid":"aa""#, r#""accountUuid":"bb""#, 1), at + Duration::minutes(4));
+    assert!(store.limits().unwrap().models.is_empty());
+}

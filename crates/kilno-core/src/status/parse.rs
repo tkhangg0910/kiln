@@ -96,6 +96,7 @@ pub fn parse_usage_cache(json: &str, updated: DateTime<Utc>) -> Option<AccountLi
     Some(AccountLimits {
         five_hour,
         seven_day,
+        models: Vec::new(),
         updated,
     })
 }
@@ -116,13 +117,14 @@ pub fn newest<'a>(statuses: impl IntoIterator<Item = &'a SessionStatus>) -> Opti
     best.map(|s| AccountLimits {
         five_hour: s.five_hour.clone(),
         seven_day: s.seven_day.clone(),
+        models: Vec::new(),
         updated: s.updated,
     })
 }
 
 /// Percent (floored) and reset time. The reset is epoch seconds today; the user's script also
 /// takes an ISO time (no offset = UTC), so do we.
-fn read_limit(el: Option<&Map<String, Value>>, percent_key: &str) -> Option<Limit> {
+pub(crate) fn read_limit(el: Option<&Map<String, Value>>, percent_key: &str) -> Option<Limit> {
     let pct = num(el, percent_key)?;
     let resets_at = match el.and_then(|o| o.get("resets_at")) {
         Some(Value::Number(n)) => n

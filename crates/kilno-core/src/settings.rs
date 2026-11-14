@@ -67,10 +67,13 @@ pub struct KilnoSettings {
     pub status_effort: bool,
     pub status_five_hour: bool,
     pub status_seven_day: bool,
+    /// The weekly limits some models have of their own (Fable), shown with the account's.
+    pub status_model_weekly: bool,
     /// One of [`RESERVE_STEPS`]; 0 is off.
     pub reserve_at: i32,
     pub reserve_five_hour: bool,
     pub reserve_seven_day: bool,
+    pub reserve_model_weekly: bool,
     pub theme: StatusTheme,
     pub setup_done: bool,
     pub use_claude: bool,
@@ -100,9 +103,11 @@ impl Default for KilnoSettings {
             status_effort: true,
             status_five_hour: true,
             status_seven_day: true,
+            status_model_weekly: true,
             reserve_at: 0,
             reserve_five_hour: true,
             reserve_seven_day: true,
+            reserve_model_weekly: true,
             theme: StatusTheme::Numbers,
             setup_done: false,
             use_claude: true,
@@ -221,9 +226,11 @@ impl KilnoSettings {
             status_effort: b("statusEffort", d.status_effort),
             status_five_hour: b("statusFiveHour", d.status_five_hour),
             status_seven_day: b("statusSevenDay", d.status_seven_day),
+            status_model_weekly: b("statusModelWeekly", d.status_model_weekly),
             reserve_at,
             reserve_five_hour: b("reserveFiveHour", d.reserve_five_hour),
             reserve_seven_day: b("reserveSevenDay", d.reserve_seven_day),
+            reserve_model_weekly: b("reserveModelWeekly", d.reserve_model_weekly),
             theme,
             setup_done: b("setupDone", d.setup_done),
             use_claude: b("useClaude", d.use_claude),
@@ -251,9 +258,16 @@ impl KilnoSettings {
         w.bool("statusEffort", self.status_effort);
         w.bool("statusFiveHour", self.status_five_hour);
         w.bool("statusSevenDay", self.status_seven_day);
+        // Keys Clayo never had are written only when off, so a Clayo file saves back unchanged.
+        if !self.status_model_weekly {
+            w.bool("statusModelWeekly", false);
+        }
         w.raw("reserveAt", &self.reserve_at.to_string());
         w.bool("reserveFiveHour", self.reserve_five_hour);
         w.bool("reserveSevenDay", self.reserve_seven_day);
+        if !self.reserve_model_weekly {
+            w.bool("reserveModelWeekly", false);
+        }
         w.str("theme", &self.theme.name().to_lowercase());
         w.bool("setupDone", self.setup_done);
         w.bool("useClaude", self.use_claude);

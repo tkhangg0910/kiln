@@ -360,6 +360,15 @@ impl KilnoApp {
                 let w = waker.clone();
                 let _ = win::instance::serve(name, move |msg| w.send(AppEvent::Handoff(msg)));
             }
+            // The tray icon: Kilno runs on with its window closed. A click shows the window; its
+            // menu's Quit goes the island's way.
+            {
+                let (revealer, w) = (revealer.clone(), waker.clone());
+                win::tray::start(move |cmd| match cmd {
+                    win::tray::TrayCmd::Show => revealer.reveal(),
+                    win::tray::TrayCmd::Quit => w.send(AppEvent::Island(IslandCmd::Quit)),
+                });
+            }
             // Signing out ends the app as a real quit would, panes closed, rather than meeting
             // a close that only hides.
             if hwnd != 0 {
@@ -368,6 +377,7 @@ impl KilnoApp {
                     for p in lock(&m).panes.iter() {
                         p.kill();
                     }
+                    win::tray::remove();
                     std::process::exit(0);
                 });
             }
@@ -758,8 +768,8 @@ impl KilnoApp {
     /// before its transcript appeared has no session to list. The last pane left takes over.
     fn close_pane(&mut self, id: u64) {
         let Some(i) = self.panes.iter().position(|p| p.id() == id) else { return };
-        let pane = self.panes.remove(i);
-        pane.shared.kill();
+        // Dropped at the end of this function: Pane::drop asks the agent to quit, then kills it.
+        let _pane = self.panes.remove(i);
         {
             let mut m = lock(&self.model);
             let placeholder = m.sidebar.by_pane(id).map(|r| r.session_id.clone());
@@ -816,19 +826,30 @@ impl KilnoApp {
     fn quit(&mut self, ctx: &egui::Context) {
         self.quitting = true;
         let _ = self.jobs.send(Job::Stop);
-        for p in &self.panes {
-            p.shared.kill();
-        }
+        // Each pane's drop asks its agent to quit and kills it CLOSE_TIME later (Pane::close).
+        let agents = !self.panes.is_empty();
         self.panes.clear();
         lock(&self.model).panes.clear();
         self.status.stop();
         self.island.shutdown();
-        // A hidden window gets no egui pass that would carry out the Close (the island's Quit
-        // comes while hidden): end here, as main would after the event loop.
-        if !self.shown {
-            std::process::exit(0);
+        #[cfg(windows)]
+        win::tray::remove();
+        if !agents {
+            // A hidden window gets no egui pass that would carry out the Close (the island's
+            // Quit comes while hidden): end here, as main would after the event loop.
+            if !self.shown {
+                std::process::exit(0);
+            }
+            ctx.send_viewport_cmd(ViewportCommand::Close);
+            return;
         }
-        ctx.send_viewport_cmd(ViewportCommand::Close);
+        // The window goes at once; the process ends once the agents have had their time (a
+        // Close now would end it before them, as main exits right after the event loop).
+        ctx.send_viewport_cmd(ViewportCommand::Visible(false));
+        let _ = std::thread::Builder::new().name("quit".into()).spawn(|| {
+            std::thread::sleep(crate::pane::CLOSE_TIME + std::time::Duration::from_millis(300));
+            std::process::exit(0);
+        });
     }
 
     fn paste(&self, pane: &Pane) {
@@ -1278,11 +1299,11 @@ impl KilnoApp {
             let renaming = self.rename.as_ref().is_some_and(|r| r.id.eq_ignore_ascii_case(id));
             if !renaming {
                 let mut name_right = right;
-                if let Some(tag) = row.agent_tag() {
+                if row.agent_tag().is_some() {
                     let c = parse_hex(row.agent_color()).gamma_multiply(0.85);
-                    let g = p.layout_no_wrap(tag.into(), semibold_mono(9.5), c);
-                    name_right -= g.size().x + 6.0;
-                    p.galley(Pos2::new(right - g.size().x, top + 3.0), g, c);
+                    let logo = Rect::from_min_size(Pos2::new(right - 12.0, top + 2.0), Vec2::splat(12.0));
+                    crate::agent_logo::paint(p, logo, row.agent(), c);
+                    name_right -= 12.0 + 6.0;
                 }
                 let g = elided(ui, row.name(), ui_font(12.5), TEXT_PRIMARY, name_right - x);
                 p.galley(Pos2::new(x, top), g, TEXT_PRIMARY);
@@ -1889,11 +1910,6 @@ fn file_paste(files: &[String]) -> (Vec<u8>, Vec<std::path::PathBuf>) {
 fn clamp_sidebar(w: f32, total: f32) -> f32 {
     let max = SIDEBAR_MAX.min(total - SPLITTER_W - TERMINAL_MIN).max(SIDEBAR_MIN);
     w.clamp(SIDEBAR_MIN, max)
-}
-
-fn semibold_mono(size: f32) -> egui::FontId {
-    // The tag is mono semibold in C#; the mono family has no semibold face here.
-    mono(size)
 }
 
 /// Section header (Open / Today / Earlier): chevron, label 11.5 semibold, count 11 faint.

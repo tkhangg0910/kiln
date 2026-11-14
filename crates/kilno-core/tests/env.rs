@@ -19,8 +19,20 @@ fn scrub_inherited_session() {
     std::env::set_var("CLAUDE_CODE_CHILD_SESSION", "1");
     std::env::set_var("ANTHROPIC_MODEL", "keep-me");
 
+    // What Claude Code sets for its tools' commands, Kilno having been started from one.
+    std::env::set_var("CLAUDECODE", "1");
+    std::env::set_var("NO_COLOR", "1");
+    std::env::set_var("GIT_EDITOR", "true");
+
     assert_eq!(child_sees("CLAUDE_CODE_CHILD_SESSION"), "1", "child inherits the marker before scrubbing");
     kilno_core::launch::scrub_inherited_session();
     assert_eq!(child_sees("CLAUDE_CODE_CHILD_SESSION"), "", "child cannot see the marker after scrubbing");
+    assert_eq!(child_sees("NO_COLOR"), "", "a pane gets its colours back");
+    assert_eq!(child_sees("GIT_EDITOR"), "", "git commit opens the editor again");
     assert_eq!(child_sees("ANTHROPIC_MODEL"), "keep-me", "configuration is left untouched");
+
+    // Not started from Claude Code: a NO_COLOR the user set on purpose is theirs.
+    std::env::set_var("NO_COLOR", "1");
+    kilno_core::launch::scrub_inherited_session();
+    assert_eq!(child_sees("NO_COLOR"), "1", "the user's own NO_COLOR stays");
 }

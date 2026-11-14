@@ -10,7 +10,7 @@ use kilno_core::settings::KilnoSettings;
 use kilno_core::status::reserve::ReserveWatch;
 use kilno_core::status::store::StatusStore;
 use kilno_core::status::strip::Meter;
-use kilno_core::status::{parse, relay, AccountLimits};
+use kilno_core::status::{claude_usage, parse, relay, AccountLimits};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
@@ -55,7 +55,9 @@ impl Status {
         reserve: impl Fn(&Meter) + Send + 'static,
     ) -> Self {
         let dir = relay::status_dir(data);
-        let store = Arc::new(StatusStore::new(dir, || parse::default_effort(&OsEnv), parse::usage_cache_path(&OsEnv)));
+        let store = StatusStore::new(dir, || parse::default_effort(&OsEnv), parse::usage_cache_path(&OsEnv))
+            .with_claude_json(claude_usage::path(&OsEnv));
+        let store = Arc::new(store);
         Self::with_store(store, settings, shown, changed, reserve)
     }
 

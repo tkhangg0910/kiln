@@ -428,7 +428,7 @@ impl SettingsPage {
                 }
                 ui.painter().hline(head.x_range(), head.bottom() - 0.5, Stroke::new(1.0, HAIRLINE));
                 let cy = head.center().y;
-                let cw = chip_width(ui, chip);
+                let cw = CHIP_W;
                 agent_chip(ui, Pos2::new(head.left() + 16.0 + cw, cy), chip, 1.0, None);
                 ui.painter().text(Pos2::new(head.left() + 16.0 + cw + 10.0, cy), Align2::LEFT_CENTER, *name, ui_font(13.0), TEXT_PRIMARY);
                 if let Some(file) = &rules.file {
@@ -528,7 +528,7 @@ fn status_page(ui: &mut Ui, s: &mut KilnoSettings) {
             ],
         );
         field_group(ui, "Account", why_foot);
-        tick_row(ui, "account", w, &mut [("5-hour limit", &mut s.status_five_hour, head || foot), ("7-day limit", &mut s.status_seven_day, head || foot)]);
+        tick_row(ui, "account", w, &mut [("5-hour limit", &mut s.status_five_hour, head || foot), ("7-day limit", &mut s.status_seven_day, head || foot), ("Model weekly", &mut s.status_model_weekly, head || foot)]);
     });
     ui.add_space(6.0);
     card_end(ui, card);
@@ -552,7 +552,7 @@ fn status_page(ui: &mut Ui, s: &mut KilnoSettings) {
     let watch = s.reserve_at > 0;
     indented(ui, 6.0, |ui| {
         let w = ui.available_width() - 6.0;
-        tick_row(ui, "reserve", w, &mut [("5-hour limit", &mut s.reserve_five_hour, watch), ("7-day limit", &mut s.reserve_seven_day, watch)]);
+        tick_row(ui, "reserve", w, &mut [("5-hour limit", &mut s.reserve_five_hour, watch), ("7-day limit", &mut s.reserve_seven_day, watch), ("Model weekly", &mut s.reserve_model_weekly, watch)]);
     });
     ui.add_space(6.0);
     card_end(ui, card);
@@ -777,7 +777,7 @@ fn row(ui: &mut Ui, id: Id, r: Row) -> RowOut {
     let rs = right_size(ui, &r.right);
     let lead_w = match r.lead {
         Lead::Icon(_) => 40.0,
-        Lead::Chip(t) => chip_width(ui, t) + 22.0,
+        Lead::Chip(_) => CHIP_W + 22.0,
     };
     let wrap_w = (w - 16.0 - r.pad_r - lead_w - rs.x).max(40.0);
     let title = ui.painter().layout(r.title.to_string(), ui_font(13.0), r.title_color, wrap_w);
@@ -803,7 +803,7 @@ fn row(ui: &mut Ui, id: Id, r: Row) -> RowOut {
             ui.painter().text(Pos2::new(x + 10.0, cy), Align2::CENTER_CENTER, c, icon_font(16.0), r.lead_color);
         }
         Lead::Chip(t) => {
-            agent_chip(ui, Pos2::new(x + chip_width(ui, t), cy), t, 1.0, None);
+            agent_chip(ui, Pos2::new(x + CHIP_W, cy), t, 1.0, None);
         }
     }
     x += lead_w;
@@ -956,19 +956,19 @@ fn later_tag(ui: &Ui, left: Pos2, text: &str, size: f32, pad: f32) {
     ui.painter().galley(r.center() - g.size() / 2.0, g, LATER_TEXT);
 }
 
-fn chip_width(ui: &Ui, text: &str) -> f32 {
-    text_w(ui, text, semibold(10.0)) + 14.0
-}
+/// An agent chip: the agent's mark in a 26 x 18 box.
+const CHIP_W: f32 = 26.0;
 
-/// A CC / CX chip, its right edge at `right_center`; dim when that agent doesn't get the rule.
-/// Returns its left edge.
+/// An agent chip for a "CC" / "CX" tag, its right edge at `right_center`; dim when that agent
+/// doesn't get the rule. Returns its left edge.
 fn agent_chip(ui: &Ui, right_center: Pos2, text: &str, opacity: f32, tip: Option<&str>) -> f32 {
-    let w = chip_width(ui, text);
-    let r = Rect::from_min_size(Pos2::new(right_center.x - w, right_center.y - 9.0), Vec2::new(w, 18.0));
+    let r = Rect::from_min_size(Pos2::new(right_center.x - CHIP_W, right_center.y - 9.0), Vec2::new(CHIP_W, 18.0));
     let p = ui.painter();
     p.rect_filled(r, 4, CHIP_BG.gamma_multiply(opacity));
     p.rect_stroke(r, 4, Stroke::new(1.0, MENU_RIM.gamma_multiply(opacity)), StrokeKind::Inside);
-    p.text(r.center(), Align2::CENTER_CENTER, text, semibold(10.0), TEXT_PRIMARY.gamma_multiply(opacity));
+    let kind = crate::agent_logo::kind_of(text);
+    let tint = if kind == kilno_core::agent::AgentKind::Codex { TEXT_PRIMARY } else { Color32::from_rgb(0xE3, 0x9A, 0x7E) };
+    crate::agent_logo::paint(p, Rect::from_center_size(r.center(), Vec2::splat(12.0)), kind, tint.gamma_multiply(opacity));
     if let Some(tip) = tip {
         ui.interact(r, Id::NULL.with(("agent-chip", text, r.min.x as i32, r.min.y as i32)), Sense::hover()).on_hover_text(tip);
     }

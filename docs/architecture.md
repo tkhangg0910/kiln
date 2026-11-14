@@ -38,19 +38,20 @@ kilno-app   (eframe/egui UI, setup + settings windows, glue)
 1. **Pane output**: child process -> ConPTY -> read thread (`kilno-pty`) -> `Terminal::feed` (`kilno-term`) -> egui draws a frame.
 2. **Pane input**: egui events -> `kilno-term::input` encoding -> PTY write.
 3. **Sessions**: a sessions thread watches the agents' folders (read-only) and feeds the sidebar model. Pane events are handled in `App::logic`, which keeps running while the window is hidden (closing the window only hides it).
-4. **Status**: Claude panes start with a status line that runs `kilno.exe --statusline [--pass]`. Claude Code pipes session JSON to it on every refresh; Kilno stores a copy and, with `--pass`, forwards the same bytes to the user's own status line command. `main()` handles this argument before any window, font or mutex exists, because it runs on every refresh.
+4. **Status**: Claude panes start with a status line that runs `kilno.exe --statusline [--pass]`. Claude Code pipes session JSON to it on every refresh; Kilno stores a copy and, with `--pass`, forwards the same bytes to the user's own status line command. `main()` handles this argument before any window, font or mutex exists, because it runs on every refresh. The account's limits are the newest of these reports, the user's script's usage cache and the usage reply Claude Code saves in `.claude.json` (`kilno-core::status::claude_usage`, parsed again only when the file's stamp changes); a model's own weekly limit (Fable) is found only in the last.
 5. **Island**: `kilno-core::island::trigger` decides when to show; `kilno-island` draws; requests that touch panes go back to the UI as `AppEvent::Island` via `island_host`.
 
 ## Process model
 
 - One Kilno per user session: a named mutex. A second launch sends its folder over a named pipe to the first and exits.
+- A notification-area icon (`win::tray`: its own thread and hidden window) shows that Kilno runs with its window closed. It is removed on every exit path and added again when Explorer restarts.
 - The process ends with `std::process::exit`, so no stray thread (PTY reader, watcher) keeps the mutex alive.
 - `panic = "abort"` in release; a panic hook first appends to `%LOCALAPPDATA%\Kilno\crash.log`.
 - Children start as top-level sessions: inherited Claude session variables are scrubbed.
 
 ## Read-only guarantee
 
-Paths under the agents' folders are `ReadOnlyDir` values: joinable and readable, never writable. `crates/kilno-core/tests/invariants.rs` guards this. Kilno writes only to `%LOCALAPPDATA%\Kilno`, the `Run` registry value, and the user `Path`.
+Paths under the agents' folders are `ReadOnlyDir` values: joinable and readable, never writable. `crates/kilno-core/tests/invariants.rs` guards this. Claude Code's `.claude.json` is only ever read, too. Kilno writes only to `%LOCALAPPDATA%\Kilno`, the `Run` registry value, and the user `Path`.
 
 ## Rendering and safety
 

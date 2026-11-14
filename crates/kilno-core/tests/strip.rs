@@ -7,7 +7,7 @@ use kilno_core::status::reserve::ReserveWatch;
 use kilno_core::status::strip::{
     band_for, effort_step, footer, header, limit_meter, model_name, reset_in, tokens, Band, Meter,
 };
-use kilno_core::status::{AccountLimits, Limit, SessionStatus};
+use kilno_core::status::{AccountLimits, Limit, ModelLimit, SessionStatus};
 
 fn now() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 3, 12, 0, 0).unwrap()
@@ -52,6 +52,7 @@ fn limits() -> AccountLimits {
     AccountLimits {
         five_hour: s.five_hour,
         seven_day: s.seven_day,
+        models: Vec::new(),
         updated: now(),
     }
 }
@@ -331,6 +332,7 @@ fn reserve() {
     let near = AccountLimits {
         five_hour: Some(Limit::new(82, Some(n + Duration::hours(1)))),
         seven_day: Some(Limit::new(14, Some(n + Duration::days(4)))),
+        models: Vec::new(),
         updated: n,
     };
     let f = footer(Some(&near), &at80, n);
@@ -401,6 +403,7 @@ fn reserve() {
     let both = AccountLimits {
         five_hour: Some(Limit::new(91, Some(n + Duration::hours(1)))),
         seven_day: Some(Limit::new(90, Some(n + Duration::days(4)))),
+        models: Vec::new(),
         updated: n,
     };
     let at90 = KilnoSettings {
@@ -507,4 +510,35 @@ fn nothing_to_show() {
         None,
         "a session without a model name shows none"
     );
+}
+
+/// Fable's own weekly limit (Team premium seats, Max) sits after the 7-day, named for the model.
+#[test]
+fn model_weekly_limits() {
+    let n = now();
+    let mut l = limits();
+    l.models = vec![ModelLimit { model: "Fable".into(), limit: Limit::new(32, Some(n + Duration::days(4))) }];
+    let f = footer(Some(&l), &all(), n);
+    assert_eq!(labels(&f), "5h,7d,Fable");
+    assert_eq!(f[2].percent, 32);
+    assert_eq!(f[2].tip, "Fable weekly limit: 32% used, resets in 4d0h", "the tooltip says which limit");
+
+    let header_only = KilnoSettings { status_footer: false, ..all() };
+    let h = header(Some(&status()), Some(&git()), Some(&l), &header_only, n).unwrap();
+    assert_eq!(labels(&h.models), "Fable", "in the header when the footer is off");
+    let both = header(Some(&status()), Some(&git()), Some(&l), &all(), n).unwrap();
+    assert!(both.models.is_empty(), "never in both places");
+
+    let off = KilnoSettings { status_model_weekly: false, ..all() };
+    assert_eq!(labels(&footer(Some(&l), &off, n)), "5h,7d", "switched off");
+
+    let at80 = KilnoSettings { reserve_at: 80, ..all() };
+    l.models[0].limit.percent = 85;
+    assert_eq!(footer(Some(&l), &at80, n)[2].band(), Band::Red);
+    let mut watch = ReserveWatch::new();
+    assert_eq!(labels(&watch.crossed(Some(&l), &at80, n)), "Fable", "crossing warns");
+    assert!(watch.crossed(Some(&l), &at80, n).is_empty(), "once per window");
+    let unwatched = KilnoSettings { reserve_model_weekly: false, ..at80 };
+    assert!(ReserveWatch::new().crossed(Some(&l), &unwatched, n).is_empty());
+    assert_eq!(footer(Some(&l), &unwatched, n)[2].band(), Band::Orange);
 }
