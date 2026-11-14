@@ -34,6 +34,21 @@ Kiln is one small native `kiln.exe`. It reads your agents' local session files a
 out; its only network call is the update check. It is an early release (v0.1.0), forked from
 the Rust port of [Clayo](https://github.com/YogiOnCode/Clayo) (see [Credits](#credits)).
 
+## Lighter than Clayo
+
+Kiln keeps Clayo's design but drops .NET and WebView2: the terminal is drawn natively instead of
+by xterm.js in an embedded browser.
+
+| | Kiln (Rust) | Clayo 1.0.6 (C#/WPF + WebView2) |
+|---|---|---|
+| Start → first frame | **0.15–0.18 s** | 1.0–1.4 s (8.8 s first run) |
+| RAM, idle with 1 session | **33 MB** | 223 MB (80 MB app + 144 MB WebView2) |
+| RAM, 5 sessions | **48 MB** | 410 MB (65 MB app + 345 MB WebView2) |
+| On disk | **one 18 MB exe** (7.2 MB download) | 135 MB folder, 260 files |
+
+Same laptop, release builds, throwaway config folders. Measured on clayo-rust, the codebase Kiln is
+forked from; method and raw numbers in [`BENCH.md`](BENCH.md).
+
 ## Quick start
 
 Needs Windows 10 or 11 (64-bit) and [Claude Code](https://docs.claude.com/en/docs/claude-code)
