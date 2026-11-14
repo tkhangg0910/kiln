@@ -1,6 +1,7 @@
 //! `kilno.exe`: every Claude Code and Codex session in one window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_logo;
 mod app;
 mod fonts;
 mod image_chip;

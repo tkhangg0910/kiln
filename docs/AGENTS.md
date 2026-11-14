@@ -24,7 +24,7 @@ Checked with Claude Code 2.1.288 and codex-cli 0.160.0 on Windows 11.
 | Island notices (needs you, done) | Yes | Yes |
 | Drop a file on the island | Yes | Yes |
 
-With both in use, each sidebar row is tagged **CC** or **CX**, and **New session** starts
+With both in use, each sidebar row shows the Claude or OpenAI (Codex) mark, and **New session** starts
 the one you picked in setup (or asks each time).
 
 ### Where they differ

@@ -483,7 +483,7 @@ impl SetupWindow {
         let badge = Rect::from_min_size(head.min, Vec2::splat(36.0));
         ui.painter().rect_filled(badge, 9, hex(b.bg));
         ui.painter().rect_stroke(badge, 9, Stroke::new(1.0, hex(b.border)), StrokeKind::Inside);
-        ui.painter().text(badge.center(), Align2::CENTER_CENTER, b.text, mono(12.0), hex(b.fg));
+        crate::agent_logo::paint(ui.painter(), Rect::from_center_size(badge.center(), Vec2::splat(20.0)), kind, hex(b.fg));
 
         // Right side, right to left: Use, Sign in, the pill.
         let mut x = right;
