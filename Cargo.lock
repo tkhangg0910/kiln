@@ -1614,7 +1614,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "kiln-app"
-version = "1.0.6"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "eframe",
@@ -1636,7 +1636,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-core"
-version = "1.0.6"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "notify",
@@ -1650,7 +1650,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-island"
-version = "1.0.6"
+version = "0.1.0"
 dependencies = [
  "ab_glyph",
  "chrono",
@@ -1664,14 +1664,14 @@ dependencies = [
 
 [[package]]
 name = "kiln-pty"
-version = "1.0.6"
+version = "0.1.0"
 dependencies = [
  "windows",
 ]
 
 [[package]]
 name = "kiln-term"
-version = "1.0.6"
+version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "egui",

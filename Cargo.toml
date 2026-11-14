@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/kiln-core", "crates/kiln-pty", "crates/kiln-term", "crates/kiln-app", "crates/kiln-island"]
 
 [workspace.package]
-version = "1.0.6"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.85"
