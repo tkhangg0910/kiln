@@ -18,7 +18,7 @@ the top of the screen that tells you when a session asks for a permission or a d
 <p align="center">
   <img src="docs/assets/demo.gif" width="860" alt="Kiln: four sessions in one window, the island flags the one that needs you">
   <br>
-  <a href="VIDEO_URL"><b>▶ Watch the full demo</b></a>
+  <a href="https://github.com/tkhangg0910/kiln/blob/main/docs/demo/demo-full.mp4"><b>▶ Watch the full demo</b></a>
 </p>
 
 ## Why Kiln
@@ -39,12 +39,12 @@ the Rust port of [Clayo](https://github.com/YogiOnCode/Clayo) (see [Credits](#cr
 Kiln keeps Clayo's design but drops .NET and WebView2: the terminal is drawn natively instead of
 by xterm.js in an embedded browser.
 
-| | Kiln (Rust) | Clayo 1.0.6 (C#/WPF + WebView2) |
-|---|---|---|
-| Start → first frame | **0.15–0.18 s** | 1.0–1.4 s (8.8 s first run) |
-| RAM, idle with 1 session | **33 MB** | 223 MB (80 MB app + 144 MB WebView2) |
-| RAM, 5 sessions | **48 MB** | 410 MB (65 MB app + 345 MB WebView2) |
-| On disk | **one 18 MB exe** (7.2 MB download) | 135 MB folder, 260 files |
+| | Kiln (Rust) | Clayo 1.0.6 (C#/WPF + WebView2) | Difference |
+|---|---|---|---|
+| Start → first frame | **0.15–0.18 s** | 1.0–1.4 s (8.8 s first run) | **5–10× faster** |
+| RAM, idle with 1 session | **33 MB** | 223 MB (80 MB app + 144 MB WebView2) | **6.8× less** |
+| RAM, 5 sessions | **48 MB** | 410 MB (65 MB app + 345 MB WebView2) | **8.6× less** |
+| On disk | **one 18 MB exe** (7.2 MB download) | 135 MB folder, 260 files | **7.4× smaller** |
 
 Same laptop, release builds, throwaway config folders. Measured on clayo-rust, the codebase Kiln is
 forked from; method and raw numbers in [`BENCH.md`](BENCH.md).
