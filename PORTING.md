@@ -431,7 +431,7 @@ Scope read fully: src/Clayo/Program.cs, App.xaml(+.cs), MainWindow.xaml(+.cs, 17
 #### Close / quit / reveal
 - [x] MAIN-111 Window X only hides (sessions keep running; island brings it back) — MainWindow.xaml.cs:1754-1761
 - [x] MAIN-112 Quit (gear "Quit Clayo", island Quit, update, sign-out): stop watchers, dispose status, stop timers, close all panes, then app exits — MainWindow.xaml.cs:1602-1606,1762-1769
-- [x] MAIN-113 No tray icon (the island is the background presence) — App.xaml.cs:24,64-67
+- [x] MAIN-113 No tray icon (the island is the background presence) — App.xaml.cs:24,64-67. Kilno 0.2.0 departs from this: it adds one (`win::tray`), as a closed window gave no sign that Kilno still ran.
 - [x] MAIN-114 Reveal: if hidden and setup needed -> show setup window instead; else Show, restore if minimized (keeps prior maximized), Activate — MainWindow.xaml.cs:530-540
 - [x] MAIN-115 NeedsSetup = !SetupDone || no in-use agent locatable (file check only, no run) — MainWindow.xaml.cs:546-555
 - [x] MAIN-116 AdoptFolder(folder, prefill): if dir exists -> set current folder, Reveal; if main window is visible start a new session with optional prefill text typed (not sent) — MainWindow.xaml.cs:511-521

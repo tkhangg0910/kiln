@@ -73,6 +73,9 @@ use (and `%LOCALAPPDATA%\Microsoft\WinGet\Links`).
 ## What Kilno reads
 
 - Claude Code sessions: `%USERPROFILE%\.claude\projects`
+- Claude Code's last usage reply, for the limits (a model's own weekly limit such as Fable's is
+  only there): `cachedUsageUtilization` and the account id in `%USERPROFILE%\.claude.json`, or
+  in `%CLAUDE_CONFIG_DIR%` if you set it. The rest of that file is skipped.
 - Codex sessions: `%CODEX_HOME%\sessions` if you set `CODEX_HOME`, else
   `%USERPROFILE%\.codex\sessions`
 
