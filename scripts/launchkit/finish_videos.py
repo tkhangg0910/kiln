@@ -13,17 +13,28 @@ def measure(path):
     return json.loads(re.findall(r"\{[^{}]+\}", r.stderr)[-1])
 
 
+# Full demo: title = 5 beats + offset, outro = 7 beats (122 BPM, see beats.json); no logo over either.
+BEAT, OFFSET = 60 / 122, 0.238
+INTRO_END, OUTRO_LEN = OFFSET + 5 * BEAT, 7 * BEAT
+
+
+def duration(path):
+    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                                capture_output=True, text=True, check=True).stdout)
+
+
 def finish(src, dst, watermark):
     m = measure(src)
-    # Fixed gain to -14 LUFS, then a look-ahead limiter at -3 dBFS so the true peak stays under
+    # Fixed gain to -14 LUFS, then a look-ahead limiter at -4.4 dBFS so the true peak stays under
     # -1.5 dB after AAC (linear loudnorm cannot both raise the level and hold the peak).
     gain = -14.0 - float(m["input_i"])
-    af = f"volume={gain:.2f}dB,alimiter=limit=0.70:attack=5:release=60:level=false,aresample=48000"
+    af = f"volume={gain:.2f}dB,alimiter=limit=0.60:attack=5:release=60:level=false,aresample=48000"
     cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-y", "-i", src]
     if watermark:
         # 64 px logo at 60 % opacity, 36 px from the bottom-right corner, over the gradient margin.
         cmd += ["-i", logo, "-filter_complex",
-                "[1]scale=64:64:flags=neighbor,format=rgba,colorchannelmixer=aa=0.6[l];[0][l]overlay=W-w-36:H-h-36[v]",
+                "[1]scale=64:64:flags=neighbor,format=rgba,colorchannelmixer=aa=0.6[l];[0][l]overlay=W-w-36:H-h-36"
+                f":enable='between(t,{INTRO_END:.2f},{duration(src) - OUTRO_LEN:.2f})'[v]",
                 "-map", "[v]", "-map", "0:a", "-c:v", "libx264", "-preset", "slow", "-crf", "17",
                 "-pix_fmt", "yuv420p", "-r", "60"]
     else:

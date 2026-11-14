@@ -60,7 +60,9 @@ export const Scene: React.FC<{ spec: SceneSpec; data: Clip; maxZoom: number; zoo
           const k = dt / 0.55;
           const r = 10 + 46 * (1 - Math.pow(1 - k, 3));
           return <div key={i} style={{ position: "absolute", left: q.x - r, top: q.y - r, width: 2 * r, height: 2 * r, borderRadius: r,
-            border: `3px solid ${T.clay}`, opacity: 0.85 * (1 - k), background: `rgba(210,117,86,${0.18 * (1 - k)})` }} />;
+            // Dark outline keeps the ring readable on light pages.
+            border: `5px solid ${T.clay}`, boxShadow: "0 0 0 2px rgba(0,0,0,.55), inset 0 0 0 2px rgba(0,0,0,.35)",
+            opacity: 0.9 * (1 - k), background: `rgba(210,117,86,${0.22 * (1 - k)})` }} />;
         })}
         {showPointer && <Pointer x={pc.x} y={pc.y} scale={1.5} />}
         {keys.map((k, i) => {

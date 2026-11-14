@@ -115,7 +115,7 @@ def work(steps):
 def ask(q):
     out()
     out(f"  {AMBER}?{RESET} {BOLD}Do you want to {q}{RESET}")
-    out(f"    {BLUE}❯ 1. Yes{RESET}")
+    out(f"    {BLUE}> 1. Yes{RESET}")
     out(f"      2. No, tell the agent what to do instead")
     out()
 

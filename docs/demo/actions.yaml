@@ -69,7 +69,7 @@ scenes:
     steps:
       - hold: 0.6
       # The terminal has no UIA children: click inside it to give it focus.
-      - click: { target: "point:[1100, 760]", zoom: 1.6 }
+      - click: { target: "point:[1100, 760]", zoom: 1.3 }
       - type: { text: "1" }
       - wait: 3.0
       # The pane header's status dot, now green (painted, no element; the sidebar row would
