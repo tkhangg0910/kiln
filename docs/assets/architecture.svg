@@ -5,7 +5,7 @@
     </marker>
     <style>
       .b{fill:#f6f8fa;stroke:#57606a;stroke-width:1.5}
-      .k{fill:#fbefe9;stroke:#d27556;stroke-width:1.5}
+      .k{fill:#fef3e8;stroke:#f2994a;stroke-width:1.5}
       .t{fill:#1f2328;font-size:15px;font-weight:600;text-anchor:middle}
       .s{fill:#57606a;font-size:12.5px;text-anchor:middle}
       .l{fill:#57606a;font-size:12.5px;font-style:italic}
