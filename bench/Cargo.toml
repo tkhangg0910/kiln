@@ -1,10 +1,10 @@
 [package]
-name = "kiln-bench"
+name = "kilno-bench"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
-# Standalone: not part of the kiln workspace, so it never ships in kiln.exe.
+# Standalone: not part of the kilno workspace, so it never ships in kilno.exe.
 [workspace]
 
 [dependencies]

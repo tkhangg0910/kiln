@@ -1,0 +1,16 @@
+[package]
+name = "kilno-term"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+alacritty_terminal = "0.26"
+egui = { version = "0.37", default-features = false }
+unicode-normalization = "0.1"
+regex.workspace = true
+
+[dev-dependencies]
+
+[lints]
+workspace = true

@@ -1,8 +1,8 @@
-"""Builds demo-data/ for the Kiln launch-kit recordings: fictional projects (git repos with a
+"""Builds demo-data/ for the Kilno launch-kit recordings: fictional projects (git repos with a
 branch and an uncommitted diff), past sessions as Claude-style transcripts, scenarios for the
-stand-in agent, an isolated Kiln data folder, and a docs page for the "other app" shots.
+stand-in agent, an isolated Kilno data folder, and a docs page for the "other app" shots.
 
-Nothing here touches the user's real configuration: Kiln is pointed at demo-data/env through
+Nothing here touches the user's real configuration: Kilno is pointed at demo-data/env through
 CLAUDE_CONFIG_DIR, CODEX_HOME and LOCALAPPDATA by record.py. Re-running rebuilds everything.
 Usage: python make_demo_data.py <repo-root>
 """
@@ -154,13 +154,13 @@ def main():
         write(p, "".join(json.dumps(l) + "\n" for l in lines))
         os.utime(p, (t.timestamp(), t.timestamp()))
 
-    write(os.path.join(ENV, "local", "Kiln", "settings.json"), json.dumps({
+    write(os.path.join(ENV, "local", "Kilno", "settings.json"), json.dumps({
         "setupDone": True, "useClaude": True, "useCodex": False, "updateCheck": False,
         "screenshotHotkey": False, "screenshotOffer": True, "theme": "numbers", "reserveAt": 0}, indent=2))
     os.makedirs(os.path.join(ENV, "codex"), exist_ok=True)
     os.makedirs(os.path.join(ENV, "tmp"), exist_ok=True)
 
-    # Stand-in agent, its scenarios and a short command on PATH (what Kiln types into the pane).
+    # Stand-in agent, its scenarios and a short command on PATH (what Kilno types into the pane).
     agent_dir = os.path.join(D, "agent")
     os.makedirs(os.path.join(agent_dir, "ctl"), exist_ok=True)
     shutil.copyfile(os.path.join(HERE, "demo_agent.py"), os.path.join(agent_dir, "demo_agent.py"))

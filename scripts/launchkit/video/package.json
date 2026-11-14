@@ -1,5 +1,5 @@
 {
-  "name": "kiln-launch-video",
+  "name": "kilno-launch-video",
   "private": true,
   "scripts": { "studio": "remotion studio src/index.ts" },
   "dependencies": {

@@ -11,3 +11,4 @@ desktop.ini
 docs/demo/raw/
 docs/demo/frames/
 demo-data/
+__pycache__/

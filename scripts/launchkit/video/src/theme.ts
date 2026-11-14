@@ -1,4 +1,4 @@
-// Kiln's own tokens (crates/kiln-app/src/theme.rs): terminal background, surfaces, text, clay accent.
+// Kilno's own tokens (crates/kilno-app/src/theme.rs): terminal background, surfaces, text, clay accent.
 export const T = {
   font: "'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif",
   bg0: "#0d1014",

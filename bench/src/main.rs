@@ -1,7 +1,7 @@
-//! Measures a Kiln build for BENCH.md: launch → first visible window, private working set of
-//! the kiln process (and, separately, of helper processes such as WebView2), and CPU at idle.
+//! Measures a Kilno build for BENCH.md: launch → first visible window, private working set of
+//! the kilno process (and, separately, of helper processes such as WebView2), and CPU at idle.
 //!
-//! kiln-bench <exe> [--cwd DIR] [--runs N] [--settle SECS] [--idle SECS] [--helpers NAME]
+//! kilno-bench <exe> [--cwd DIR] [--runs N] [--settle SECS] [--idle SECS] [--helpers NAME]
 //! The child inherits this process's environment, so point CLAUDE_CONFIG_DIR, CODEX_HOME and
 //! LOCALAPPDATA at temp folders before running it.
 
@@ -141,7 +141,7 @@ fn kill_tree(pid: u32) {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let exe = args.first().expect("usage: kiln-bench <exe> [--cwd DIR] [--runs N] [--settle S] [--idle S] [--helpers NAME]").clone();
+    let exe = args.first().expect("usage: kilno-bench <exe> [--cwd DIR] [--runs N] [--settle S] [--idle S] [--helpers NAME]").clone();
     let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let runs: usize = opt("--runs").and_then(|v| v.parse().ok()).unwrap_or(5);
     let settle: u64 = opt("--settle").and_then(|v| v.parse().ok()).unwrap_or(10);

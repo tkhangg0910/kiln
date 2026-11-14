@@ -1,6 +1,6 @@
-# Third-party notices — Kiln
+# Third-party notices — Kilno
 
-`kiln.exe` is MIT licensed (see `LICENSE`). It contains or links the following third-party work,
+`kilno.exe` is MIT licensed (see `LICENSE`). It contains or links the following third-party work,
 each under its own licence. The full licence texts are in each project's repository (and, for
 Rust crates, in the crate source on crates.io).
 

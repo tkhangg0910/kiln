@@ -1,7 +1,7 @@
 # PORTING.md — Clayo C# → Rust native
 
-> **Kiln note.** Written for clayo-rust (the Rust port of Clayo) before the fork; there `clayo-*`
-> crates, `clayo.exe` and `%LOCALAPPDATA%\Clayo` are Kiln's `kiln-*`, `kiln.exe` and `%LOCALAPPDATA%\Kiln`.
+> **Kilno note.** Written for clayo-rust (the Rust port of Clayo) before the fork; there `clayo-*`
+> crates, `clayo.exe` and `%LOCALAPPDATA%\Clayo` are Kilno's `kilno-*`, `kilno.exe` and `%LOCALAPPDATA%\Kilno`.
 
 > **Layout note (clayo-rust).** This document was written in the original repository, where the Rust
 > workspace lived in `rust/` next to the C# app in `src/Clayo`. In clayo-rust the workspace is at the

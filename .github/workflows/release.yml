@@ -1,6 +1,6 @@
 # Pushing a v* tag builds the release zip on GitHub, attests where it was built, and puts the
 # zip and its .sha256 on a draft release for that tag. Check the draft, write the notes, publish.
-# Anyone can then check a download: gh attestation verify <zip> --repo tkhangg0910/kiln
+# Anyone can then check a download: gh attestation verify <zip> --repo tkhangg0910/kilno
 name: Release
 
 on:
@@ -44,19 +44,19 @@ jobs:
       - name: The tag matches the version
         shell: pwsh
         run: |
-          $zip = Get-ChildItem publish/kiln-*-win-x64.zip
-          if ($zip.Name -ne "kiln-$($env:GITHUB_REF_NAME.TrimStart('v'))-win-x64.zip") {
+          $zip = Get-ChildItem publish/kilno-*-win-x64.zip
+          if ($zip.Name -ne "kilno-$($env:GITHUB_REF_NAME.TrimStart('v'))-win-x64.zip") {
             throw "$($zip.Name) does not match the tag $env:GITHUB_REF_NAME"
           }
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: publish/kiln-*-win-x64.zip
+          subject-path: publish/kilno-*-win-x64.zip
 
       - name: Draft release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME --draft --verify-tag --title "Kiln $($env:GITHUB_REF_NAME.TrimStart('v'))" `
-            (Get-ChildItem publish/kiln-*-win-x64.zip).FullName (Get-ChildItem publish/kiln-*-win-x64.zip.sha256).FullName
+          gh release create $env:GITHUB_REF_NAME --draft --verify-tag --title "Kilno $($env:GITHUB_REF_NAME.TrimStart('v'))" `
+            (Get-ChildItem publish/kilno-*-win-x64.zip).FullName (Get-ChildItem publish/kilno-*-win-x64.zip.sha256).FullName
