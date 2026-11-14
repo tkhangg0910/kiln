@@ -113,7 +113,8 @@ Third-party crates and the embedded Chart.js / Mermaid files:
 
 - **[Clayo](https://github.com/YogiOnCode/Clayo)** by **Yogeswaran Amsavalli** is the original app
   (C#/WPF, MIT). Its design, behaviour, texts, mascot, icon and island are his work; Kilno starts
-  from them. The mascot and icon are still Clayo's, used with credit.
+  from them. Kilno's mascot, a small brick kiln, is redrawn on top of Clayo's: the same grid,
+  limbs, sunglasses and animation.
 - **[clayo-rust](https://github.com/tkhangg0910/clayo-rust)** is the native Rust port of Clayo
   that Kilno is forked from; its full history, including every original Clayo commit, is kept here.
   Background: [`PORTING.md`](PORTING.md), [`BENCH.md`](BENCH.md).

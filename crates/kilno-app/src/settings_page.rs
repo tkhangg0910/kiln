@@ -847,7 +847,7 @@ fn row(ui: &mut Ui, id: Id, r: Row) -> RowOut {
                 let picked = i == chosen;
                 let p = ui.painter();
                 let (bg, rim, fg) = if picked {
-                    (Color32::from_rgba_unmultiplied(0xD2, 0x75, 0x56, 0x24), CLAY, TEXT_PRIMARY)
+                    (Color32::from_rgba_unmultiplied(0xF2, 0x99, 0x4A, 0x24), CLAY, TEXT_PRIMARY)
                 } else if sresp.hovered() {
                     (ROW_HOVER_BG, HAIRLINE, MUTED_AA)
                 } else {
