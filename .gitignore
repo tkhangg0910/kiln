@@ -5,3 +5,9 @@ target/
 *.swp
 Thumbs.db
 desktop.ini
+
+# Launch kit (local working files)
+.launchkit/
+docs/demo/raw/
+docs/demo/frames/
+demo-data/
