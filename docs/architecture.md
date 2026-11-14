@@ -1,0 +1,57 @@
+# Architecture
+
+Kiln is a single native Windows process (`kiln.exe`) that hosts several terminal panes, each running a Claude Code or Codex session, plus a separate always-on-top "island" window that reports which session needs attention. No WebView, no embedded runtime.
+
+Origin: Kiln is forked from [clayo-rust](https://github.com/tkhangg0910/clayo-rust), the Rust port of [Clayo](https://github.com/YogiOnCode/Clayo) (C#/WPF, MIT) by Yogeswaran Amsavalli.
+
+## Layers
+
+```
+kiln-app   (eframe/egui UI, setup + settings windows, glue)
+ ├─ kiln-term    VT parser + egui terminal widget
+ ├─ kiln-pty     ConPTY child processes
+ ├─ kiln-island  layered Win32 island window (own thread)
+ └─ kiln-core    everything without a UI (pure logic, file formats, state machines)
+```
+
+`kiln-core` has no UI dependency, so most behaviour is testable with temp folders. `kiln-app` is the only crate that depends on all the others.
+
+## Components
+
+| Component | Responsibility |
+|---|---|
+| `kiln-core::sessions` | Reads Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`) transcripts: model, tail, change detection, `notify`-based watching. |
+| `kiln-core::status` | Status-line relay, per-session status store (`<data>\status\<guid>.json`), strip formatting, reserve/limit warnings. |
+| `kiln-core::island` | The island's state machine (`trigger`) and the drop-to-ask mention text. |
+| `kiln-core::agent` | Detection and setup of the Claude and Codex executables. |
+| `kiln-core::settings`, `store` | `settings.json`, `names.json`, `parents.json` in the data folder. |
+| `kiln-core::security` | "Ask before" rules Kiln adds to sessions it starts; the user's own rules are read-only. |
+| `kiln-core::pages` | Agent-written HTML pages (`<project>\.kiln\pages\*.html`), sealed with a Content-Security-Policy. |
+| `kiln-core::system` | Login-start (Run key), user PATH, GitHub releases updater. |
+| `kiln-pty` | Spawns a child under a pseudoconsole; a read thread delivers raw bytes; teardown kills the child, then closes the console off-thread. All `unsafe` lives in `sys.rs`. |
+| `kiln-term` | `alacritty_terminal` grid, colours, key/mouse encoding, egui widget. Bytes are parsed on the PTY read thread; the UI only locks the grid to draw. Scrollback is 5000 lines. |
+| `kiln-island` | Layered, never-focused Win32 window on its own STA thread, painted with `tiny-skia`; glow, mascot, picker, drop target, screenshots. |
+| `kiln-app` | Main window (sidebar, splitter, header, panes), setup window, Settings, island host, single-instance handling, updater, doc/page viewers. |
+
+## Data flow
+
+1. **Pane output**: child process -> ConPTY -> read thread (`kiln-pty`) -> `Terminal::feed` (`kiln-term`) -> egui draws a frame.
+2. **Pane input**: egui events -> `kiln-term::input` encoding -> PTY write.
+3. **Sessions**: a sessions thread watches the agents' folders (read-only) and feeds the sidebar model. Pane events are handled in `App::logic`, which keeps running while the window is hidden (closing the window only hides it).
+4. **Status**: Claude panes start with a status line that runs `kiln.exe --statusline [--pass]`. Claude Code pipes session JSON to it on every refresh; Kiln stores a copy and, with `--pass`, forwards the same bytes to the user's own status line command. `main()` handles this argument before any window, font or mutex exists, because it runs on every refresh.
+5. **Island**: `kiln-core::island::trigger` decides when to show; `kiln-island` draws; requests that touch panes go back to the UI as `AppEvent::Island` via `island_host`.
+
+## Process model
+
+- One Kiln per user session: a named mutex. A second launch sends its folder over a named pipe to the first and exits.
+- The process ends with `std::process::exit`, so no stray thread (PTY reader, watcher) keeps the mutex alive.
+- `panic = "abort"` in release; a panic hook first appends to `%LOCALAPPDATA%\Kiln\crash.log`.
+- Children start as top-level sessions: inherited Claude session variables are scrubbed.
+
+## Read-only guarantee
+
+Paths under the agents' folders are `ReadOnlyDir` values: joinable and readable, never writable. `crates/kiln-core/tests/invariants.rs` guards this. Kiln writes only to `%LOCALAPPDATA%\Kiln`, the `Run` registry value, and the user `Path`.
+
+## Rendering and safety
+
+eframe with the OpenGL (glow) backend and a Direct3D 12 wgpu fallback (WARP when there is no GPU). `unsafe_code` is denied in `kiln-core` and `kiln-term` (workspace lint). The crates that need Win32 (`kiln-app`, `kiln-pty`, `kiln-island`) deny `unsafe_op_in_unsafe_fn` and require a `// SAFETY` comment on every unsafe block (`clippy::undocumented_unsafe_blocks`).

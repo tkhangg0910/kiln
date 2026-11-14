@@ -1,0 +1,189 @@
+# Machine-readable actions for scripts/launchkit/record.py (one entry per raw clip, in recording
+# order; each scene starts from the state the previous one left).
+#
+# Targets, in order of preference:
+#   name:<regex>[:<ControlType>]  a UIA element of the Kiln window, matched on its accessible name.
+#                    egui exposes widgets through AccessKit; a button's name is its tooltip text.
+#   point:[x, y]     a point relative to the Kiln window's client area. Used only where there is no
+#                    UIA element (reason on each step): egui list rows, popup menus, the Settings
+#                    page body and the terminal have no accessible names.
+#   island:[dx, dy]  a point on the island, relative to the top centre of the screen (the island is
+#                    a layered Win32 window with no UIA children).
+#   screen:[x, y]    an absolute screen point (only for the "four terminals" problem shot).
+# agent: drives the stand-in agent of a session (work | ask | finish | doc), see demo_agent.py.
+# shot: a README screenshot (taken only with --screenshots).
+# setup: steps run before recording starts (not filmed); steps: filmed.
+
+common:
+  window_title: "K I L N"
+  region: [0, 0, 1920, 1008]       # the work area, taskbar excluded
+  cps: 17                           # typing speed (characters per second)
+
+scenes:
+  - scene: 01-problem
+    setup:
+      - terminals: { count: 4, projects: [atlas-api, orbit-web, pulse-mobile, ledger-service], ask_after: [99, 99, 2.4, 99] }
+      - wait: 1.5
+    steps:
+      - hold: 1.0
+      - move: { target: "screen:[700, 300]" }
+      - hold: 0.6
+      - move: { target: "screen:[420, 900]", zoom: 1.6 }        # the question nobody sees (bottom-left console)
+      - hold: 1.6
+
+  - scene: 02-one-window
+    setup:
+      - launch: { app: kiln, size: [1920, 1008] }
+      - wait: 2.0
+    steps:
+      - hold: 0.8
+      # Sidebar row "Add rate limiting to the orders API": egui list rows have no AccessKit name.
+      - move: { target: "point:[227, 291]" }
+      - double_click: { target: "point:[227, 291]", zoom: 1.8 }
+      - wait: 1.2
+      - agent: { session: rate, do: work }
+      - wait: 2.2
+      - move: { target: "name:^Context:", zoom: 1.8 }
+      - hold: 1.4
+      - shot: { file: sessions.png, region: window }
+
+  - scene: 03-island
+    setup:
+      - browser: { url: "site/index.html" }
+      - wait: 1.5
+    steps:
+      - hold: 0.8
+      - scroll: { target: "screen:[960, 600]", amount: -3 }
+      - wait: 0.6
+      - agent: { session: rate, do: ask }
+      - wait: 1.5
+      - shot: { file: island.png, region: [410, 0, 1100, 300] }
+      - move: { target: "island:[0, 34]" }
+      - click: { target: "island:[0, 34]", zoom: 2.0 }
+      - wait: 1.0
+      - hold: 1.2
+
+  - scene: 04-answer
+    setup:
+      - focus: kiln
+    steps:
+      - hold: 0.6
+      # The terminal has no UIA children: click inside it to give it focus.
+      - click: { target: "point:[1100, 760]", zoom: 1.3 }
+      - type: { text: "1" }
+      - wait: 3.0
+      # The pane header's status dot, now green (painted, no element; the sidebar row would
+      # show its tooltip).
+      - move: { target: "point:[500, 33]", zoom: 1.6 }
+      - hold: 1.4
+
+  - scene: 13-doc-chip
+    setup:
+      - focus: kiln
+      - wait: 0.5
+    steps:
+      - hold: 0.5
+      - click: { target: "name:Click to read it here", zoom: 1.5 }
+      - wait: 1.4
+      - scroll: { target: "point:[1600, 500]", amount: -2 }
+      - hold: 1.8
+      - shot: { file: doc-viewer.png, region: window }
+
+  - scene: 06-status
+    setup:
+      - focus: kiln
+    steps:
+      - hold: 0.5
+      - move: { target: "name:^Model$", zoom: 1.8 }
+      - hold: 0.6
+      - move: { target: "name:^Context:", zoom: 1.8 }
+      - hold: 1.0
+      - move: { target: "name:^5-hour limit", zoom: 1.8 }
+      - hold: 1.4
+
+  - scene: 05-screenshot
+    setup:
+      - focus: kiln
+      - click_silent: "name:Click to read it here"    # close the doc viewer again
+      - browser: { url: "site/index.html" }
+      - wait: 1.0
+    steps:
+      - hold: 0.8
+      # A screenshot lands on the clipboard (as Win+Shift+S would put it there). With "Offer to
+      # send every new screenshot" on, the island asks which session it is for — no shortcut.
+      - clipboard_image: { from: browser, label: "Screenshot copied", at: "island:[0, 120]", zoom: 1.8 }
+      - wait: 1.8
+      - shot: { file: picker.png, region: [410, 0, 1100, 420] }
+      # Picker row 1 (the island has no UIA children).
+      - move: { target: "island:[-120, 104]" }
+      - click: { target: "island:[-120, 104]", zoom: 1.8 }
+      - wait: 1.6
+      - move: { target: "point:[900, 700]", zoom: 1.6 }
+      - hold: 1.6
+
+  # ---- full video only ----
+  - scene: 10-new-session
+    setup:
+      - focus: kiln
+    steps:
+      - hold: 0.6
+      - click: { target: "name:^Pick the folder to start in", zoom: 1.5 }
+      - wait: 0.8
+      # "atlas-api" in the folder menu: egui popup entries have no AccessKit name.
+      - click: { target: "point:[80, 616]", zoom: 1.5 }
+      - wait: 2.6
+      - type: { text: "Add a health check endpoint" }
+      - type: { text: "\n" }
+      - wait: 3.2
+      - hold: 1.2
+
+  - scene: 11-search-resume
+    setup:
+      - focus: kiln
+    steps:
+      - hold: 0.5
+      - click: { target: "name:^$:Edit", zoom: 1.5 }
+      - type: { text: "dark" }
+      - wait: 0.8
+      # The filtered list's first row (egui list rows have no AccessKit name).
+      - double_click: { target: "point:[227, 291]", zoom: 1.5 }
+      - wait: 1.0
+      - agent: { session: dark, do: work }
+      - wait: 2.4
+      - hold: 1.0
+
+  - scene: 12-branch
+    setup:
+      - focus: kiln
+      - clear_search: true
+    steps:
+      - hold: 0.5
+      - click: { target: "name:^Copies this conversation", zoom: 1.5 }
+      - wait: 2.5
+      - move: { target: "point:[240, 400]", zoom: 1.4 }          # the branch row under its parent
+      - hold: 1.8
+
+  - scene: 14-settings
+    setup:
+      - focus: kiln
+      # Back to "Dark mode for the settings page" (first row under Open; no AccessKit name).
+      - click_silent: "point:[209, 290]"
+    steps:
+      - hold: 0.5
+      - click: { target: "name:^Settings$", zoom: 1.5 }
+      # Gear menu "Settings…", the Status bar tab and the Rings segment: egui popup and Settings
+      # page widgets have no AccessKit names.
+      - click: { target: "point:[490, 774]", zoom: 1.5 }
+      - wait: 0.8
+      - click: { target: "point:[573, 163]", zoom: 1.5 }
+      - wait: 0.6
+      - click: { target: "point:[1701, 240]", zoom: 1.5 }
+      - wait: 0.8
+      - shot: { file: settings.png, region: window }
+      - click: { target: "name:^Close \\(Esc\\)$", zoom: 1.5 }
+      - wait: 1.0
+      - move: { target: "name:^5-hour limit", zoom: 1.5 }
+      - hold: 1.2
+      - move: { target: "name:^Context:", zoom: 1.5 }
+      - hold: 1.2
+      - shot: { file: status.png, region: window }

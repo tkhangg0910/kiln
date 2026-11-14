@@ -1,7 +1,7 @@
-# Claude Code and Codex in Clayo
+# Claude Code and Codex in Kiln
 
-Clayo runs your coding agent in its panes: Claude Code, Codex, or both. You need at least
-one. The first time Clayo starts, its setup window finds them, installs or signs in to one
+Kiln runs your coding agent in its panes: Claude Code, Codex, or both. You need at least
+one. The first time Kiln starts, its setup window finds them, installs or signs in to one
 if you ask, and lets you choose which to use. **Settings › Agents** opens it again.
 
 Checked with Claude Code 2.1.288 and codex-cli 0.160.0 on Windows 11.
@@ -16,7 +16,7 @@ Checked with Claude Code 2.1.288 and codex-cli 0.160.0 on Windows 11.
 | Branch from here | Yes | Yes |
 | Sessions in the sidebar, by project | Yes | Yes |
 | Session titles | Claude's own | Codex's own |
-| Branches shown under the session they came from | Branches made in Clayo | Every fork, also ones made outside Clayo |
+| Branches shown under the session they came from | Branches made in Kiln | Every fork, also ones made outside Kiln |
 | Status light: working, done | Yes | Yes |
 | Status light: needs you | Yes | Yes |
 | Pane header: model, branch, context, effort | Yes | Yes (effort only when you set one) |
@@ -30,8 +30,8 @@ the one you picked in setup (or asks each time).
 ### Where they differ
 
 - **A new Codex session shows in the sidebar after your first message.** Codex picks its
-  own session id and writes nothing until then, so Clayo finds the session once it appears.
-  Claude takes the id Clayo gives it, so its row is there at once.
+  own session id and writes nothing until then, so Kiln finds the session once it appears.
+  Claude takes the id Kiln gives it, so its row is there at once.
 - **Codex limits.** Codex reports its limits per plan. A 5-hour or 7-day limit shows in the
   Codex pane's header; a plan whose only limit has another length (a monthly one, for
   example) shows none.
@@ -67,14 +67,14 @@ Check it with `codex --version` and `codex login status`.
 ### Installed somewhere else?
 
 Press **Locate…** on the agent's row in the setup window and pick its `claude.exe` or
-`codex.cmd`. Otherwise Clayo looks on your PATH, then in the folders the installers above
+`codex.cmd`. Otherwise Kiln looks on your PATH, then in the folders the installers above
 use (and `%LOCALAPPDATA%\Microsoft\WinGet\Links`).
 
-## What Clayo reads
+## What Kiln reads
 
 - Claude Code sessions: `%USERPROFILE%\.claude\projects`
 - Codex sessions: `%CODEX_HOME%\sessions` if you set `CODEX_HOME`, else
   `%USERPROFILE%\.codex\sessions`
 
-Clayo only reads these, and never opens either agent's sign-in files: to see whether you're
+Kiln only reads these, and never opens either agent's sign-in files: to see whether you're
 signed in it asks the agent (`claude auth status`, `codex login status`).
