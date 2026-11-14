@@ -116,24 +116,39 @@ pub fn find_on_path(exe: &str, path: Option<&str>) -> Option<PathBuf> {
 }
 
 /// Session markers Claude Code puts on its child processes.
-pub const INHERITED_SESSION_VARS: [&str; 7] = [
+pub const INHERITED_SESSION_VARS: [&str; 8] = [
     "CLAUDECODE",
     "CLAUDE_CODE_CHILD_SESSION",
     "CLAUDE_CODE_ENTRYPOINT",
     "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ATTENDED",
     "CLAUDE_CODE_MESSAGING_SOCKET",
     "CLAUDE_CODE_MESSAGING_TOKEN",
     "CLAUDE_PID",
 ];
 
-/// Removes [`INHERITED_SESSION_VARS`] from this process's environment. Panes inherit it, so if
+/// What Claude Code sets for the commands its tools run, so their output is plain and they never
+/// wait on a person: no colour, no editor for git, no git credential prompt. Right for a tool
+/// call, wrong for an interactive pane (a colourless claude, `git commit` that never opens the
+/// editor), so they go too, but only when Kilno itself was started from a Claude Code session:
+/// a NO_COLOR the user set on purpose stays.
+pub const INHERITED_TOOL_VARS: [&str; 4] = ["NO_COLOR", "GIT_EDITOR", "GIT_TERMINAL_PROMPT", "GIT_ASKPASS"];
+
+/// Removes [`INHERITED_SESSION_VARS`] from this process's environment, and
+/// [`INHERITED_TOOL_VARS`] when it came from a Claude Code session. Panes inherit it, so if
 /// Kilno was started from inside a Claude Code session those markers would reach the claude it
 /// spawns; CLAUDE_CODE_CHILD_SESSION alone switches transcript saving off, leaving the session
 /// invisible to the sidebar and to --resume. Configuration (ANTHROPIC_*, CLAUDE_EFFORT) stays.
 /// Call once at startup, before any other thread reads the environment.
 pub fn scrub_inherited_session() {
+    let from_claude = std::env::var_os("CLAUDECODE").is_some();
     for name in INHERITED_SESSION_VARS {
         std::env::remove_var(name);
+    }
+    if from_claude {
+        for name in INHERITED_TOOL_VARS {
+            std::env::remove_var(name);
+        }
     }
 }
 
