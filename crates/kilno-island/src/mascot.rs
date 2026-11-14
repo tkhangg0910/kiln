@@ -28,6 +28,9 @@ const ARM_PIVOT: (f32, f32) = (53.0, 32.5);
 const FLAME_PIVOT: (f32, f32) = (31.0, 44.0);
 const FLAME_FLARE: f32 = 0.22;
 
+/// One rect of the figure: (x, y, w, h), its transform, and the top and bottom of its gradient box.
+type Part = ((f32, f32, f32, f32), Transform, f32, f32);
+
 /// The glasses slide down 9 units in Peek.
 pub const GLASSES_PEEK: f64 = 9.0;
 /// The glasses' transition: 500 ms BackEase out, amplitude .45.
@@ -235,7 +238,7 @@ pub fn draw(pm: &mut PixmapMut, rig: &Rig, base: Transform) {
     let id = Transform::identity();
     // The kiln: a domed brick body (four stacked rects) with a chimney. Each part is
     // (rect, transform, gradient box top and bottom) so the dome shades as one piece.
-    let parts: [((f32, f32, f32, f32), Transform, f32, f32); 11] = [
+    let parts: [Part; 11] = [
         ((13.0, 44.0, 3.0, 8.0), leg_a, 44.0, 52.0),
         ((20.0, 44.0, 3.0, 8.0), leg_b, 44.0, 52.0),
         ((39.0, 44.0, 3.0, 8.0), leg_b, 44.0, 52.0),
