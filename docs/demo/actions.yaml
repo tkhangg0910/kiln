@@ -15,7 +15,7 @@
 # setup: steps run before recording starts (not filmed); steps: filmed.
 
 common:
-  window_title: "K I L N"
+  window_title: "K I L N O"
   region: [0, 0, 1920, 1008]       # the work area, taskbar excluded
   cps: 17                           # typing speed (characters per second)
 

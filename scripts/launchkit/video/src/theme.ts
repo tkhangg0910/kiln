@@ -5,7 +5,7 @@ export const T = {
   bg1: "#1b1f26",
   text: "#e6e9ee",
   muted: "#8c94a1",
-  clay: "#d27556",
+  clay: "#f2994a",
   amber: "#d4a24c",
   hair: "#262c35",
 };

@@ -1,6 +1,7 @@
-//! The Voxel mascot (KilnoMascot.cs): a 64x64 grid of rects and two lens polygons, drawn with
-//! tiny-skia without antialiasing (the SVG's crispEdges), every part on its own transform so the
-//! moves can bend it. Geometry, colours and keyframes are PORTING.md Appendix D "DRAWING".
+//! Kilno's mascot: a little brick kiln with a chimney and fire in its door, wearing the
+//! sunglasses. Built on Clayo's Voxel mascot (PORTING.md Appendix D "DRAWING"): the same
+//! 64x64 grid, limbs, glasses, rig and keyframes, drawn with tiny-skia without antialiasing
+//! (crispEdges), every part on its own transform so the moves can bend it.
 
 use crate::anim::{back_out, looped};
 use tiny_skia::{
@@ -23,7 +24,12 @@ pub enum MascotMove {
 /// left edge, the mouth opens downwards from its top.
 const WHOLE_PIVOT: (f32, f32) = (32.0, 52.0);
 const ARM_PIVOT: (f32, f32) = (53.0, 32.5);
-const MOUTH_PIVOT: (f32, f32) = (31.0, 37.0);
+/// The fire grows upwards from the hearth: at the Talk peak (mouth 3.2) it licks over the door.
+const FLAME_PIVOT: (f32, f32) = (31.0, 44.0);
+const FLAME_FLARE: f32 = 0.22;
+
+/// One rect of the figure: (x, y, w, h), its transform, and the top and bottom of its gradient box.
+type Part = ((f32, f32, f32, f32), Transform, f32, f32);
 
 /// The glasses slide down 9 units in Peek.
 pub const GLASSES_PEEK: f64 = 9.0;
@@ -230,19 +236,26 @@ pub fn draw(pm: &mut PixmapMut, rig: &Rig, base: Transform) {
     let arm_r = Transform::from_rotate_at(f(rig.arm_r_turn), ARM_PIVOT.0, ARM_PIVOT.1)
         .post_translate(0.0, f(rig.arm_r_y));
     let id = Transform::identity();
-    let parts: [((f32, f32, f32, f32), Transform); 7] = [
-        ((13.0, 44.0, 3.0, 8.0), leg_a),
-        ((20.0, 44.0, 3.0, 8.0), leg_b),
-        ((39.0, 44.0, 3.0, 8.0), leg_b),
-        ((46.0, 44.0, 3.0, 8.0), leg_a),
-        ((2.0, 28.0, 9.0, 9.0), arm_l),
-        ((53.0, 28.0, 9.0, 9.0), arm_r),
-        ((10.0, 12.0, 43.0, 33.0), id),
+    // The kiln: a domed brick body (four stacked rects) with a chimney. Each part is
+    // (rect, transform, gradient box top and bottom) so the dome shades as one piece.
+    let parts: [Part; 11] = [
+        ((13.0, 44.0, 3.0, 8.0), leg_a, 44.0, 52.0),
+        ((20.0, 44.0, 3.0, 8.0), leg_b, 44.0, 52.0),
+        ((39.0, 44.0, 3.0, 8.0), leg_b, 44.0, 52.0),
+        ((46.0, 44.0, 3.0, 8.0), leg_a, 44.0, 52.0),
+        ((2.0, 28.0, 9.0, 9.0), arm_l, 28.0, 37.0),
+        ((53.0, 28.0, 9.0, 9.0), arm_r, 28.0, 37.0),
+        ((39.0, 3.0, 7.0, 9.0), id, 3.0, 12.0),
+        ((10.0, 18.0, 43.0, 27.0), id, 11.0, 45.0),
+        ((12.0, 15.0, 39.0, 3.0), id, 11.0, 45.0),
+        ((15.0, 13.0, 33.0, 2.0), id, 11.0, 45.0),
+        ((20.0, 11.0, 23.0, 2.0), id, 11.0, 45.0),
     ];
 
     // All the dark copies behind all the faces (the body's copy does not cover the legs).
-    let dark = solid(hex(0x6e2d1b));
-    for ((x, y, w, h), t) in parts {
+    let dark_c = hex(0x55200f);
+    let dark = solid(dark_c);
+    for ((x, y, w, h), t, _, _) in parts {
         let mut pb = PathBuilder::new();
         for d in [0.7, 1.4, 2.1] {
             add_rect(&mut pb, x + d, y + d, w, h);
@@ -251,18 +264,38 @@ pub fn draw(pm: &mut PixmapMut, rig: &Rig, base: Transform) {
             pm.fill_path(&p, &dark, FillRule::Winding, t.post_concat(whole), None);
         }
     }
-    for ((x, y, w, h), t) in parts {
-        let paint = shaded(gradient(y, y + h, 0xe07f60, 0xb55a3f));
+    for ((x, y, w, h), t, g0, g1) in parts {
+        let paint = shaded(gradient(g0, g1, 0xcf6a48, 0x96422b));
         pm.fill_path(&rect_path(x, y, w, h), &paint, FillRule::Winding, t.post_concat(whole), None);
     }
 
-    // Light from the top left: a bright top edge and a fainter left edge.
+    // Chimney cap, then faint mortar lines on the lower body.
+    pm.fill_path(&rect_path(38.0, 2.0, 9.0, 2.0), &dark, FillRule::Winding, whole, None);
+    pm.fill_path(&rect_path(38.0, 2.0, 9.0, 1.0), &solid(hex(0xe58a68)), FillRule::Winding, whole, None);
+    let mut mortar = PathBuilder::new();
+    for (x, y, w, h) in [
+        (10.0, 34.0, 43.0, 1.0),
+        (10.0, 40.0, 43.0, 1.0),
+        (18.0, 35.0, 1.0, 5.0),
+        (44.0, 35.0, 1.0, 5.0),
+        (14.0, 41.0, 1.0, 4.0),
+        (48.0, 41.0, 1.0, 4.0),
+    ] {
+        add_rect(&mut mortar, x, y, w, h);
+    }
+    if let Some(p) = mortar.finish() {
+        let mut c = dark_c;
+        c.apply_opacity(0.35);
+        pm.fill_path(&p, &solid(c), FillRule::Winding, whole, None);
+    }
+
+    // Light from the top left: a bright top edge on the dome and a fainter left edge.
     let mut top = Color::WHITE;
     top.apply_opacity(0.28);
-    pm.fill_path(&rect_path(10.0, 12.0, 43.0, 1.0), &solid(top), FillRule::Winding, whole, None);
+    pm.fill_path(&rect_path(20.0, 11.0, 23.0, 1.0), &solid(top), FillRule::Winding, whole, None);
     let mut left = Color::WHITE;
     left.apply_opacity(0.12);
-    pm.fill_path(&rect_path(10.0, 12.0, 1.0, 33.0), &solid(left), FillRule::Winding, whole, None);
+    pm.fill_path(&rect_path(10.0, 18.0, 1.0, 27.0), &solid(left), FillRule::Winding, whole, None);
 
     let mut eyes = PathBuilder::new();
     add_rect(&mut eyes, 15.0, 23.0, 8.0, 6.0);
@@ -277,8 +310,24 @@ pub fn draw(pm: &mut PixmapMut, rig: &Rig, base: Transform) {
         let t = Transform::from_translate(f(rig.pupils), 0.0).post_concat(whole);
         pm.fill_path(&p, &solid(hex(0x1b2126)), FillRule::Winding, t, None);
     }
-    let mouth = about(Transform::from_scale(1.0, f(rig.mouth)), MOUTH_PIVOT).post_concat(whole);
-    pm.fill_path(&rect_path(29.0, 37.0, 4.0, 1.0), &solid(hex(0x2a0e06)), FillRule::Winding, mouth, None);
+    // The mouth is the kiln's door; talking makes the fire in it flare up from the hearth.
+    let door = solid(hex(0x2a0e06));
+    pm.fill_path(&rect_path(26.0, 36.0, 11.0, 8.0), &door, FillRule::Winding, whole, None);
+    pm.fill_path(&rect_path(27.0, 35.0, 9.0, 1.0), &door, FillRule::Winding, whole, None);
+    let flare = 1.0 + (f(rig.mouth) - 1.0) * FLAME_FLARE;
+    let flame = about(Transform::from_scale(1.0, flare), FLAME_PIVOT).post_concat(whole);
+    for (rects, c) in [
+        ([(27.0, 38.0, 9.0, 6.0), (28.0, 37.0, 7.0, 1.0)], 0xf2994a),
+        ([(29.0, 40.0, 5.0, 4.0), (30.0, 39.0, 3.0, 1.0)], 0xffd35c),
+    ] {
+        let mut pb = PathBuilder::new();
+        for (x, y, w, h) in rects {
+            add_rect(&mut pb, x, y, w, h);
+        }
+        if let Some(p) = pb.finish() {
+            pm.fill_path(&p, &solid(hex(c)), FillRule::Winding, flame, None);
+        }
+    }
 
     // The glasses are one rigid piece.
     let g = Transform::from_translate(0.0, f(rig.glasses)).post_concat(whole);
@@ -375,10 +424,13 @@ mod tests {
     #[test]
     fn renders_the_body_and_the_glasses() {
         let pm = render(MascotMove::Idle, None, 64);
-        // Body face near its top (gradient top colour), not covered by anything.
+        // The dome near its top (gradient top colour), not covered by anything.
         let body = px(&pm, 30, 14);
         assert_eq!(body[3], 255);
-        assert!(body[0] > 200 && body[1] > 110 && body[1] < 140, "{body:?}");
+        assert!(body[0] > 190 && body[1] > 90 && body[1] < 120, "{body:?}");
+        // The chimney stands above the dome; beside it is empty.
+        assert_eq!(px(&pm, 42, 6)[3], 255);
+        assert_eq!(px(&pm, 30, 6)[3], 0);
         // Eye white between the glasses bar and the lens bottom, under the lens: lens colour.
         let lens = px(&pm, 20, 26);
         assert!(lens[0] < 80 && lens[3] == 255, "{lens:?}");
@@ -388,6 +440,17 @@ mod tests {
         // Peek: glasses slid down 9 units, so the eye whites show at y 24.
         let peek = render(MascotMove::Peek, None, 64);
         assert_eq!(px(&peek, 16, 24), [0xf4, 0xf6, 0xf8, 255]);
+    }
+
+    #[test]
+    fn talking_flares_the_fire_over_the_door() {
+        let mut rest = Pixmap::new(64, 64).unwrap();
+        draw(&mut rest.as_mut(), &Rig::REST, placed(0.0, 0.0, 64.0));
+        let mut talk = Pixmap::new(64, 64).unwrap();
+        draw(&mut talk.as_mut(), &Rig { mouth: 3.2, ..Rig::REST }, placed(0.0, 0.0, 64.0));
+        assert_eq!(px(&rest, 31, 35), [0x2a, 0x0e, 0x06, 255], "the door's top at rest");
+        assert_eq!(px(&talk, 31, 35), [0xf2, 0x99, 0x4a, 255], "fire over it while talking");
+        assert_eq!(px(&rest, 31, 42), [0xff, 0xd3, 0x5c, 255], "the fire's core");
     }
 
     #[test]

@@ -27,7 +27,7 @@ pub const DONE: Color32 = hex(0x6BBF8A);
 pub const FAILED: Color32 = hex(0xD2605F);
 pub const ENDED: Color32 = hex(0x5A6472);
 pub const DORMANT: Color32 = hex(0x39404B);
-pub const CLAY: Color32 = hex(0xD27556);
+pub const CLAY: Color32 = hex(0xF2994A);
 pub const MENU_RIM: Color32 = hex(0x323A46);
 pub const FOOTER_BAND: Color32 = hex(0x171B21);
 pub const ROW_HOVER: Color32 = hex(0x1F242C);
@@ -329,7 +329,7 @@ pub fn tick_box(ui: &Ui, rect: Rect, on: bool, enabled: bool) {
     let p = ui.painter();
     let (bg, rim, mark) = match (on, enabled) {
         (_, false) => (Color32::TRANSPARENT, hex(0x3A414C), hex(0x59616D)),
-        (true, true) => (Color32::from_rgba_unmultiplied(0xD2, 0x75, 0x56, 0x24), CLAY, CLAY),
+        (true, true) => (Color32::from_rgba_unmultiplied(0xF2, 0x99, 0x4A, 0x24), CLAY, CLAY),
         (false, true) => (Color32::TRANSPARENT, MUTED_AA, CLAY),
     };
     p.rect_filled(rect, 4, bg);
