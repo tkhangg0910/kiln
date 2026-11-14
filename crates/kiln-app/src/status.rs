@@ -199,8 +199,9 @@ mod tests {
         std::fs::write(status.join("0f8e4c2a-1b3d-4e5f-8a9b-0c1d2e3f4a5b.json"), &json).unwrap();
         let got = rx.recv_timeout(Duration::from_secs(10)).expect("reserve warning");
         assert_eq!(got, ("5h".to_string(), 85));
-        // A rewrite in the same window says nothing new.
-        std::fs::write(status.join("0f8e4c2a-1b3d-4e5f-8a9b-0c1d2e3f4a5b.json"), json.replace("85", "86")).unwrap();
+        // A rewrite in the same window says nothing new. Only the percentage changes: a blanket
+        // replace of "85" could also hit the resets_at timestamp and open a new window.
+        std::fs::write(status.join("0f8e4c2a-1b3d-4e5f-8a9b-0c1d2e3f4a5b.json"), json.replace(r#""used_percentage":85"#, r#""used_percentage":86"#)).unwrap();
         assert!(rx.recv_timeout(Duration::from_millis(1500)).is_err());
         s.stop();
     }
