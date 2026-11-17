@@ -4,6 +4,9 @@
 $ErrorActionPreference = 'Stop'
 # Windows PowerShell's progress bar slows a download to a crawl.
 $ProgressPreference = 'SilentlyContinue'
+# Out of the install folder first: a shell standing in it (Kilno's working folder when it was
+# started from Explorer) keeps it busy, and the swap below fails with "in use".
+Set-Location ([IO.Path]::GetTempPath())
 
 # The Update button names the folder the running Kilno is in, which may be elsewhere.
 $dir = if ($env:KILNO_DIR) { $env:KILNO_DIR.TrimEnd('\') } else { Join-Path $env:LOCALAPPDATA 'Programs\Kilno' }

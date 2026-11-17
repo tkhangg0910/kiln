@@ -121,4 +121,5 @@ fn install_command_runs_the_tagged_script_with_kilno_dir() {
     assert!(args[4].contains("irm 'https://raw.githubusercontent.com/tkhangg0910/kilno/v1.0.7/scripts/install.ps1' | iex"));
     let env: Vec<_> = c.get_envs().collect();
     assert_eq!(env, [(std::ffi::OsStr::new("KILNO_DIR"), Some(std::ffi::OsStr::new(r"C:\Apps\Kilno\")))]);
+    assert_eq!(c.get_current_dir(), Some(std::env::temp_dir().as_path()), "not standing in the folder it swaps");
 }

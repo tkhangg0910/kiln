@@ -146,5 +146,8 @@ pub fn install_command(version: Version, kilno_dir: &Path) -> Command {
         ),
     ]);
     c.env("KILNO_DIR", kilno_dir);
+    // Not Kilno's own folder (its working folder when started from Explorer): a shell standing
+    // in it keeps the folder busy and the update's swap fails with "in use".
+    c.current_dir(std::env::temp_dir());
     c
 }
