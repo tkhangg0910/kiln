@@ -4,8 +4,9 @@
 No. Kilno runs the Claude Code and Codex CLIs you already have and uses their sign-in.
 
 **Does Kilno send my code or prompts anywhere?**
-No. Its only network call is the GitHub releases check of `tkhangg0910/kilno`, which you can turn
-off in Settings › General.
+No. Its only network calls are the GitHub releases check of `tkhangg0910/kilno` (Settings ›
+General) and, if you turn on live usage (Settings › Status bar, off by default), Anthropic's usage
+endpoint, asked with your Claude sign-in for the limits `/usage` shows.
 
 **Does it change my Claude Code or Codex settings?**
 No. It reads `%USERPROFILE%\.claude` and `%USERPROFILE%\.codex` (or `CLAUDE_CONFIG_DIR` /
@@ -16,8 +17,22 @@ Claude Code does not hand a model's own weekly limit to its status line, but it 
 usage reply it fetched in `%USERPROFILE%\.claude.json` (`cachedUsageUtilization`). Kilno reads
 that reply and the signed-in account's id from the file, nothing else: your email, MCP server
 settings and project list are skipped while parsing and never kept. No sign-in token is read and
-no request is made. A reply saved for another account is not shown. The key is Claude Code's own
-and undocumented; if it changes, the extra limit simply stops showing.
+no request is made, unless you turn on live usage (below). A reply saved for another account is
+not shown. The key is Claude Code's own and undocumented; if it changes, the extra limit simply
+stops showing.
+
+**Why is a limit a few minutes behind?**
+By default Kilno makes no request of its own: the 5-hour and 7-day limits come with each Claude
+reply's status line, which can trail `/usage` by a point for a while, and the Fable limit from the
+usage reply Claude Code saves now and then. Kilno picks either up the moment it is written; a
+limit's tooltip says how old it is. Past its reset time a limit shows 0 % until the next report.
+
+For the numbers `/usage` shows, turn on **Live usage** in Settings › Status bar. Kilno then asks
+Anthropic's usage endpoint itself: every 1, 2 or 5 minutes while the window shows, after a Claude
+reply (at most once a minute) and when you click a limit. It reads only the access token from
+Claude Code's `.credentials.json` (not the refresh token), sends it to `api.anthropic.com` alone
+(redirects are not followed), and never saves or logs it. An expired token is not sent; Claude
+Code renews it.
 
 **What happens to running sessions when I close the window?**
 They keep running and the island keeps watching them. The Kilno icon in the notification area

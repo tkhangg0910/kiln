@@ -8,6 +8,7 @@
 
 pub mod input;
 pub mod palette;
+pub mod paths;
 pub mod tags;
 pub mod widget;
 

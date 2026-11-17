@@ -349,10 +349,11 @@ fn cell_height(ui: &Ui, meters: &[Meter], theme: StatusTheme) -> f32 {
 
 /// LimitsView: Numbers in two ruled columns, Bars as a row each, Rings and Chips as two cards
 /// side by side; past two limits the cells go on in a second row. `rect` is as tall as
-/// [`limits_height`].
-pub fn draw_limits(ui: &mut Ui, rect: Rect, meters: &[Meter], theme: StatusTheme) {
+/// [`limits_height`]. True when one was clicked (the footer then reads the limits again).
+pub fn draw_limits(ui: &mut Ui, rect: Rect, meters: &[Meter], theme: StatusTheme) -> bool {
+    let mut clicked = false;
     if meters.is_empty() {
-        return;
+        return clicked;
     }
     let painter = ui.painter().with_clip_rect(rect.expand(1.0).intersect(ui.clip_rect()));
     let col_w = rect.width() / 2.0;
@@ -392,10 +393,12 @@ pub fn draw_limits(ui: &mut Ui, rect: Rect, meters: &[Meter], theme: StatusTheme
             }
         };
         // Tooltip and screen reader name, as Draw.Describe.
-        let r = ui.interact(cell, Id::NULL.with(("limit-cell", i)), Sense::hover());
-        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &m.tip));
-        r.on_hover_text(&m.tip);
+        let r = ui.interact(cell, Id::NULL.with(("limit-cell", i)), Sense::click());
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &m.tip));
+        clicked |= r.clicked();
+        r.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(&m.tip);
     }
+    clicked
 }
 
 /// "5h 62% ↻ 1h20m".

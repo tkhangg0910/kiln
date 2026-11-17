@@ -49,6 +49,21 @@ pub const BURST_MIN: usize = 3;
 pub const QUIET_MS: i64 = 1500;
 /// Chunks remembered for the burst count.
 pub const RECENT_CAP: usize = 12;
+/// With Claude's hooks reporting turns, a turn they said is running but whose output has gone
+/// this quiet ended without a Stop (you pressed Esc): Claude's spinner draws every second while
+/// it works.
+pub const HOOK_QUIET_MS: i64 = 5000;
+
+/// What a Claude hook reported (`kilno --hook`): exact where the output stream is a guess.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hook {
+    /// A prompt was sent (UserPromptSubmit).
+    Working,
+    /// The turn ended (Stop).
+    Done,
+    /// Claude asks for permission (Notification).
+    Ask,
+}
 
 fn find(hay: &[u8], needle: &[u8]) -> bool {
     hay.windows(needle.len()).any(|w| w == needle)
@@ -189,6 +204,8 @@ pub struct PaneStatusTracker {
     asked_at: DateTime<Utc>,
     /// A Codex transcript has reported a turn, so working/done come from it from here on.
     turn_known: bool,
+    /// A Claude hook has reported, so working/done come from hooks from here on, not bursts.
+    hooks_known: bool,
     command_typed_at: Option<DateTime<Utc>>,
     prefill: Option<String>,
 }
@@ -207,6 +224,7 @@ impl PaneStatusTracker {
             answered: false,
             asked_at: crate::time::min(),
             turn_known: false,
+            hooks_known: false,
             command_typed_at: None,
             prefill: None,
         }
@@ -267,7 +285,7 @@ impl PaneStatusTracker {
         self.answered = true;
         // Codex writes nothing while an approved command runs, so its transcript would leave the
         // question up; the turn goes on either way, and the transcript corrects this from here.
-        if self.turn_known && self.status == PaneStatus::NeedsInput {
+        if (self.turn_known || self.hooks_known) && self.status == PaneStatus::NeedsInput {
             return self.set(PaneStatus::Working);
         }
         None
@@ -283,6 +301,29 @@ impl PaneStatusTracker {
         self.turn_known = true;
         let next = from_turn(self.status, turn, at, self.asked_at, self.answered)?;
         self.set(next)
+    }
+
+    /// A Claude hook. From the first one on, bursts and silence no longer decide working or
+    /// done: an idle Claude's redraws read as a turn that never happened.
+    pub fn on_hook(&mut self, hook: Hook, now: DateTime<Utc>) -> Option<PaneStatus> {
+        if self.status == PaneStatus::Exited {
+            return None;
+        }
+        self.hooks_known = true;
+        match hook {
+            Hook::Working => {
+                self.answered = false;
+                // The prompt's own echo starts the quiet clock fresh.
+                self.last_output = now;
+                self.set(PaneStatus::Working)
+            }
+            Hook::Done => self.set(PaneStatus::Done),
+            Hook::Ask => {
+                self.asked_at = now;
+                self.answered = false;
+                self.set(PaneStatus::NeedsInput)
+            }
+        }
     }
 
     /// The shell ended.
@@ -308,6 +349,16 @@ impl PaneStatusTracker {
     pub fn on_tick(&mut self, now: DateTime<Utc>) -> TickOutcome {
         let mut out = TickOutcome::default();
         if self.status == PaneStatus::Exited {
+            return out;
+        }
+        let quiet = self.quiet_ms(now);
+        if self.hooks_known {
+            if quiet > QUIET_MS as f64 {
+                out.prefill = self.take_prefill();
+            }
+            if self.status == PaneStatus::Working && quiet > HOOK_QUIET_MS as f64 {
+                out.status = self.set(PaneStatus::Done);
+            }
             return out;
         }
         let quiet = self.quiet_ms(now);
@@ -345,6 +396,15 @@ impl PaneStatusTracker {
         let quiet_at = self.last_output + TimeDelta::milliseconds(QUIET_MS + 1);
         let prefill_due =
             self.prefill.is_some() && prefill_ready(self.last_output, self.command_typed_at);
+        if self.hooks_known {
+            let stalled = self.last_output + TimeDelta::milliseconds(HOOK_QUIET_MS + 1);
+            return match (self.status == PaneStatus::Working, prefill_due) {
+                (true, true) => Some(quiet_at.min(stalled)),
+                (true, false) => Some(stalled),
+                (false, true) => Some(quiet_at),
+                (false, false) => None,
+            };
+        }
         if self.turn_known {
             return prefill_due.then_some(quiet_at);
         }

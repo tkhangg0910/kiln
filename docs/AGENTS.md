@@ -79,5 +79,7 @@ use (and `%LOCALAPPDATA%\Microsoft\WinGet\Links`).
 - Codex sessions: `%CODEX_HOME%\sessions` if you set `CODEX_HOME`, else
   `%USERPROFILE%\.codex\sessions`
 
-Kilno only reads these, and never opens either agent's sign-in files: to see whether you're
-signed in it asks the agent (`claude auth status`, `codex login status`).
+Kilno only reads these. It never opens either agent's sign-in files to see whether you're signed
+in: it asks the agent (`claude auth status`, `codex login status`). The one exception is live
+usage (Settings › Status bar, off by default): then it reads the access token in Claude Code's
+`.credentials.json` to ask Anthropic's usage endpoint for your limits, and sends it nowhere else.

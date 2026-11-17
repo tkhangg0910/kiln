@@ -187,7 +187,8 @@ fn settings_file_for_claude() {
     );
 }
 
-/// The same bytes the C# build wrote (System.Text.Json escapes ' as \u0027).
+/// Escaped as the C# build's System.Text.Json did (' as \u0027); the hooks that report a
+/// turn (UserPromptSubmit, Stop, Notification) follow the status line.
 #[test]
 fn settings_file_bytes_match_csharp() {
     let got = settings_json(
@@ -195,9 +196,16 @@ fn settings_file_bytes_match_csharp() {
         None,
         &[],
     );
+    let exe = r"\u0027C:/Users/x/AppData/Local/Programs/Kilno/kilno.exe\u0027";
+    let hook = |e: &str| format!(r#"[{{"hooks":[{{"type":"command","command":"{exe} --hook {e}"}}]}}]"#);
     assert_eq!(
         got,
-        r#"{"statusLine":{"type":"command","command":"\u0027C:/Users/x/AppData/Local/Programs/Kilno/kilno.exe\u0027 --statusline"}}"#
+        format!(
+            r#"{{"statusLine":{{"type":"command","command":"{exe} --statusline"}},"hooks":{{"UserPromptSubmit":{},"Stop":{},"Notification":{}}}}}"#,
+            hook("working"),
+            hook("done"),
+            hook("ask")
+        )
     );
 }
 

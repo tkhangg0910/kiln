@@ -41,6 +41,8 @@ pub enum Bucket {
     /// Last activity today (local calendar).
     Today,
     Earlier,
+    /// Hidden by the user (or under a hidden parent), and not open: the list's last section.
+    Hidden,
 }
 
 impl Bucket {
@@ -49,16 +51,17 @@ impl Bucket {
             Bucket::Open => "Open",
             Bucket::Today => "Today",
             Bucket::Earlier => "Earlier",
+            Bucket::Hidden => "Hidden",
         }
     }
 
-    /// Open and Today start expanded, Earlier folded away.
+    /// Open and Today start expanded, Earlier and Hidden folded away.
     pub fn expanded_by_default(self) -> bool {
-        self != Bucket::Earlier
+        matches!(self, Bucket::Open | Bucket::Today)
     }
 }
 
-/// Sort combo: Newest (default), Oldest, Name.
+/// Sort combo: Newest (default), Oldest, Name, Custom (the order you dragged sessions into).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SortMode {
     #[default]
@@ -66,6 +69,9 @@ pub enum SortMode {
     Oldest,
     /// Alphabetical and nothing else: branches keep marker and indent but are not threaded.
     Name,
+    /// Dragged order ([`crate::store::order`]) within each section and folder; sessions never
+    /// dragged come first, newest first. Branches stay under their session.
+    Custom,
 }
 
 /// What the list shows: the search text, the group combo (Folder = true, default) and the sort.
@@ -110,6 +116,10 @@ pub struct SessionRow {
     pub depth: usize,
     /// Sort key landing a branch directly beneath its parent: a parent's key prefixes its children's.
     pub thread_order: String,
+    /// Hidden from the list, itself or through a parent (set by [`Sidebar::mark_hidden`]).
+    pub hidden: bool,
+    /// Its top-level session's dragged rank (set by [`Sidebar::mark_order`]).
+    pub rank: Option<i64>,
 }
 
 impl SessionRow {
@@ -126,6 +136,8 @@ impl SessionRow {
             branch_of: None,
             depth: 0,
             thread_order: String::new(),
+            hidden: false,
+            rank: None,
         }
     }
 
@@ -203,6 +215,8 @@ impl SessionRow {
     pub fn bucket<Tz: TimeZone>(&self, now: DateTime<Utc>, tz: &Tz) -> Bucket {
         if self.is_open() {
             Bucket::Open
+        } else if self.hidden {
+            Bucket::Hidden
         } else if self.when(now).with_timezone(tz).date_naive()
             == now.with_timezone(tz).date_naive()
         {
@@ -563,6 +577,59 @@ impl Sidebar {
         }
     }
 
+    /// Marks each row hidden when it or a parent in the list is ([`crate::store::hidden`]), so
+    /// hiding a session takes its branches with it. Call after [`Self::link_threads`].
+    pub fn mark_hidden(&mut self, is_hidden: impl Fn(&str) -> bool) {
+        let keys: Vec<String> = self.rows.keys().cloned().collect();
+        for k in &keys {
+            let mut row = &self.rows[k];
+            let mut hidden = is_hidden(&row.session_id);
+            for _ in 0..MAX_BRANCH_DEPTH {
+                if hidden {
+                    break;
+                }
+                let Some(p) = row.parent_id.as_deref().and_then(|p| self.get(p)) else { break };
+                hidden = is_hidden(&p.session_id);
+                row = p;
+            }
+            self.rows.get_mut(k).expect("key from map").hidden = hidden;
+        }
+    }
+
+    /// Gives each row its top-level session's dragged rank, so a thread moves as one. Call
+    /// after [`Self::link_threads`].
+    pub fn mark_order(&mut self, rank_of: impl Fn(&str) -> Option<i64>) {
+        let keys: Vec<String> = self.rows.keys().cloned().collect();
+        for k in &keys {
+            let root = self.root_of(&self.rows[k].session_id);
+            let rank = rank_of(&root);
+            self.rows.get_mut(k).expect("key from map").rank = rank;
+        }
+    }
+
+    /// The top-level session a row hangs from (itself when it is one).
+    pub fn root_of(&self, id: &str) -> String {
+        self.lineage(id).pop().unwrap_or_else(|| id.to_string())
+    }
+
+    /// The session and the parents above it in the list, nearest first: what has to be
+    /// unhidden for its row to show again.
+    pub fn lineage(&self, id: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = self.get(id);
+        while let Some(r) = cur {
+            if out.len() > MAX_BRANCH_DEPTH {
+                break;
+            }
+            out.push(r.session_id.clone());
+            cur = r.parent_id.as_deref().and_then(|p| self.get(p));
+        }
+        if out.is_empty() {
+            out.push(id.to_string());
+        }
+        out
+    }
+
     /// Newest activity per project (case-insensitive): folder groups sort by it, not by name.
     fn folder_ranks(&self, now: DateTime<Utc>) -> HashMap<String, DateTime<Utc>> {
         let mut ranks: HashMap<String, DateTime<Utc>> = HashMap::new();
@@ -602,13 +669,14 @@ impl Sidebar {
             if opts.group_by_folder {
                 o = o.then_with(|| match opts.sort {
                     SortMode::Name => Ordering::Equal,
-                    SortMode::Newest => rank(b).cmp(&rank(a)),
+                    SortMode::Newest | SortMode::Custom => rank(b).cmp(&rank(a)),
                     SortMode::Oldest => rank(a).cmp(&rank(b)),
                 });
                 o = o.then_with(|| ci_cmp(&a.project(), &b.project()));
             }
             o.then_with(|| match opts.sort {
                 SortMode::Name => ci_cmp(a.name(), b.name()),
+                SortMode::Custom => a.rank.cmp(&b.rank).then_with(|| a.thread_order.cmp(&b.thread_order)),
                 _ => a.thread_order.cmp(&b.thread_order),
             })
             .then_with(|| a.session_id.cmp(&b.session_id))

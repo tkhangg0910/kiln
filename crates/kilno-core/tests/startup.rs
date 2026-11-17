@@ -43,19 +43,32 @@ fn login_startup_follows_the_exe_and_the_opt_out() {
     assert!(!s.is_on(), "off before anything is written");
 
     s.keep(a).unwrap();
-    assert!(s.is_on(), "on by default");
+    assert!(!s.is_on(), "a start never turns it on: only your switch does (Defender's Persistence.A!ml)");
+
+    s.set(true, a).unwrap();
     assert_eq!(
         value().as_deref(),
         Some(r#""C:\a\kilno.exe" --background"#),
-        "the running exe, hidden"
+        "turned on: the running exe, hidden"
     );
 
     s.keep(b).unwrap();
     assert_eq!(
         value().as_deref(),
         Some(r#""C:\b\kilno.exe" --background"#),
-        "follows the exe"
+        "the Kilno it named is gone (moved): follows the exe"
     );
+
+    // A Kilno that is still there (the installed one) is not taken over by another copy.
+    let here = std::env::current_exe().unwrap();
+    s.set(true, &here).unwrap();
+    s.keep(c).unwrap();
+    assert_eq!(
+        value(),
+        Some(kilno_core::system::login_startup::run_command(&here)),
+        "a test build leaves it alone"
+    );
+    s.set(true, b).unwrap();
 
     s.set(false, b).unwrap();
     assert_eq!(value(), None, "turned off removes the entry");
@@ -82,4 +95,19 @@ fn login_startup_follows_the_exe_and_the_opt_out() {
 fn only_a_release_build_writes_the_real_run_key() {
     let real = LoginStartup::for_this_user(&DataDir::new(r"C:\nowhere\Kilno"));
     assert_eq!(real.can_write(), !cfg!(debug_assertions));
+}
+
+#[test]
+fn repair_only_when_the_named_kilno_is_gone() {
+    use kilno_core::system::login_startup::{exe_of, needs_repair};
+    let exe = Path::new(r"C:\new\kilno.exe");
+    let gone = |_: &Path| false;
+    let there = |_: &Path| true;
+    assert_eq!(exe_of(r#""C:\x y\kilno.exe" --background"#).unwrap(), Path::new(r"C:\x y\kilno.exe"));
+    assert_eq!(exe_of(r"C:\k.exe --background").unwrap(), Path::new(r"C:\k.exe"));
+    assert!(!needs_repair(r#""C:\new\kilno.exe" --background"#, exe, gone), "already right");
+    assert!(needs_repair(r#""C:\old\kilno.exe" --background"#, exe, gone), "moved: follow");
+    assert!(!needs_repair(r#""C:\old\kilno.exe" --background"#, exe, there), "another Kilno still there");
+    assert!(needs_repair(r#""C:\NEW\kilno.exe""#, exe, there), "this exe without --background");
+    assert!(!needs_repair("", exe, gone), "nothing to read");
 }

@@ -349,6 +349,17 @@ fn account_newest_report_wins() {
         Some(40),
         "account: a session without 5h/7d windows does not blank them"
     );
+
+    // Right after a 5-hour reset Claude Code reports only the 7-day: each limit is chosen on its
+    // own, so the 5-hour bar stays (from the last report that had it) and the 7-day is the newest.
+    let after_reset = [
+        sessions[1].clone(),
+        status("after-reset", None, Some(Limit::new(41, reset)), now + Duration::minutes(1)),
+    ];
+    let account = newest(after_reset.iter()).unwrap();
+    assert_eq!(account.five_hour.map(|l| l.percent), Some(12), "the 5-hour is kept");
+    assert_eq!(account.seven_day.map(|l| l.percent), Some(41), "the 7-day is the newest");
+    assert_eq!(account.updated, now + Duration::minutes(1), "as of the newest report used");
 }
 
 #[test]
@@ -624,4 +635,36 @@ fn store_with_claude_json() {
     // Signed in as someone else: the old account's numbers go.
     write(&claude_json, &saved(at, 47).replacen(r#""accountUuid":"aa""#, r#""accountUuid":"bb""#, 1), at + Duration::minutes(4));
     assert!(store.limits().unwrap().models.is_empty());
+}
+
+/// A recent live usage reply beats a status line report written after it (Claude Code rewrites
+/// that file with the same lagging numbers); an old one is just another report.
+#[test]
+fn live_usage_wins_while_fresh() {
+    use kilno_core::status::AccountLimits;
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    let store = StatusStore::new(d, || "medium".into(), d.join("no-usage-cache.json"));
+    store.start().unwrap();
+    let now = Utc::now();
+    let s = write(&d.join(format!("{A}.json")), &BUSY.replace(ID, A), now);
+    store.load(&s);
+    assert_eq!(store.limits().unwrap().seven_day.map(|l| l.percent), Some(9), "the status line alone");
+
+    let live = |percent, at| AccountLimits {
+        five_hour: None,
+        seven_day: Some(Limit::new(percent, None)),
+        models: Vec::new(),
+        updated: at,
+    };
+    store.set_live(Some(live(10, now - Duration::minutes(1))));
+    let l = store.limits().unwrap();
+    assert_eq!(l.seven_day.map(|l| l.percent), Some(10), "a fresh live reply wins over a newer file");
+    assert_eq!(l.five_hour.map(|l| l.percent), Some(42), "a limit the live reply lacks stays");
+
+    store.set_live(Some(live(10, now - Duration::minutes(30))));
+    assert_eq!(store.limits().unwrap().seven_day.map(|l| l.percent), Some(9), "an old live reply does not");
+
+    store.set_live(None);
+    assert_eq!(store.limits().unwrap().seven_day.map(|l| l.percent), Some(9), "switched off: forgotten");
 }

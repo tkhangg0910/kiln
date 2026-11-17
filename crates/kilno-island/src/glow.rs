@@ -3,10 +3,9 @@
 //! [`GlowAnim`]; the window that shows it is in the Win32 part.
 
 use crate::anim::{breath, Ease, Tween};
-use tiny_skia::{
-    Color, GradientStop, LinearGradient, Paint, PixmapMut, Point, RadialGradient, Rect,
-    SpreadMode, Transform,
-};
+use tiny_skia::{Color, GradientStop, LinearGradient, Paint, PixmapMut, Point, Rect, SpreadMode, Transform};
+#[cfg(test)]
+use tiny_skia::RadialGradient;
 
 pub const GLOW_WIDTH: f64 = 760.0;
 pub const GLOW_HEIGHT: f64 = 200.0;
@@ -73,6 +72,8 @@ pub struct GlowFrame {
     pub bar: f64,
 }
 
+/// The tiny-skia gradient the glow was painted with before; kept to check [`paint`] against.
+#[cfg(test)]
 fn color(c: (f64, f64, f64), a: f64) -> Color {
     Color::from_rgba(
         (c.0 / 255.0) as f32,
@@ -83,6 +84,7 @@ fn color(c: (f64, f64, f64), a: f64) -> Color {
     .unwrap_or(Color::TRANSPARENT)
 }
 
+#[cfg(test)]
 fn layer(pm: &mut PixmapMut, (peak, k, rx, ry, cy): Layer, tint: (f64, f64, f64), opacity: f64, group: Transform) {
     if opacity <= 0.0 {
         return;
@@ -117,18 +119,116 @@ fn layer(pm: &mut PixmapMut, (peak, k, rx, ry, cy): Layer, tint: (f64, f64, f64)
     }
 }
 
-/// Paints a frame onto a cleared pixmap `scale` times the logical size.
+/// Entries in a layer's falloff table, indexed by r² (0..1).
+const LUT: usize = 1024;
+
+/// One layer, ready for the pixel loop: its falloff by r², colour and where its ellipse is in
+/// device pixels (centre, and 1/radius² on each axis).
+struct Prepared {
+    lut: [f32; LUT],
+    rgb: [f32; 3],
+    cx: f32,
+    cy: f32,
+    inv_rx2: f32,
+    inv_ry2: f32,
+}
+
+fn prepare((peak, k, rx, ry, cy): Layer, tint: (f64, f64, f64), opacity: f64, f: &GlowFrame, scale: f64) -> Option<Prepared> {
+    if opacity <= 0.0 || f.scale_x <= 0.0 || f.scale_y <= 0.0 {
+        return None;
+    }
+    let mut lut = [0f32; LUT];
+    for (i, v) in lut.iter_mut().enumerate() {
+        let r2 = i as f64 / (LUT - 1) as f64;
+        *v = (falloff(peak, k, r2.sqrt()) * opacity).clamp(0.0, 1.0) as f32;
+    }
+    // The ellipse (rx·w, ry·h) about (w/2, cy·h), squeezed about the centre line by the frame's
+    // scale, dropped, then scaled to device pixels: the same group the window always used.
+    let half = GLOW_WIDTH / 2.0;
+    let rx_px = rx * GLOW_WIDTH * f.scale_x * scale;
+    let ry_px = ry * GLOW_HEIGHT * f.scale_y * scale;
+    Some(Prepared {
+        lut,
+        rgb: [tint.0 as f32 / 255.0, tint.1 as f32 / 255.0, tint.2 as f32 / 255.0],
+        cx: (half * scale) as f32,
+        cy: ((cy * GLOW_HEIGHT * f.scale_y + f.drop) * scale) as f32,
+        inv_rx2: (1.0 / (rx_px * rx_px)) as f32,
+        inv_ry2: (1.0 / (ry_px * ry_px)) as f32,
+    })
+}
+
+/// Paints a frame onto a cleared pixmap `scale` times the logical size. The three layers are
+/// worked out per pixel from a table (a few multiplies each) rather than as tiny-skia radial
+/// gradients: those cost 30 ms a frame at 150 % and starved the island's clicks of its thread.
 pub fn paint(pm: &mut PixmapMut, scale: f64, f: &GlowFrame) {
+    let layers: Vec<Prepared> = [
+        prepare(AURA, f.aura_tint, f.light, f, scale),
+        prepare(HALO, f.tint, f.light, f, scale),
+        prepare(CORE, f.core_tint, f.light * f.core, f, scale),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let (w, h) = (pm.width() as usize, pm.height() as usize);
+    // The layers were always clipped to the window's rectangle squeezed and dropped with them.
+    let half = GLOW_WIDTH / 2.0;
+    let (x0, x1) = ((half - f.scale_x * half) * scale, (half + f.scale_x * half) * scale);
+    let (y0, y1) = (f.drop * scale, (f.scale_y * GLOW_HEIGHT + f.drop) * scale);
+    let clip_x = |px: f32| f64::from(px) >= x0 && f64::from(px) < x1;
+    let data = pm.data_mut();
+    for y in 0..h {
+        let py = y as f32 + 0.5;
+        if f64::from(py) < y0 || f64::from(py) >= y1 {
+            continue;
+        }
+        // Each layer's v² for this row; a row outside every ellipse is left clear.
+        let dy: Vec<f32> = layers.iter().map(|l| (py - l.cy) * (py - l.cy) * l.inv_ry2).collect();
+        if dy.iter().all(|v| *v >= 1.0) {
+            continue;
+        }
+        // Only the columns some layer's ellipse reaches on this row.
+        let (mut from, mut to) = (f32::MAX, f32::MIN);
+        for (l, v2) in layers.iter().zip(&dy) {
+            if *v2 < 1.0 {
+                let half_w = ((1.0 - v2) / l.inv_rx2).sqrt();
+                from = from.min(l.cx - half_w);
+                to = to.max(l.cx + half_w);
+            }
+        }
+        let from = (from.floor().max(0.0) as usize).min(w);
+        let to = (to.ceil().max(0.0) as usize).min(w);
+        let row = &mut data[y * w * 4..(y + 1) * w * 4];
+        for x in from..to {
+            let px = x as f32 + 0.5;
+            if !clip_x(px) {
+                continue;
+            }
+            let (mut r, mut g, mut b, mut a) = (0f32, 0f32, 0f32, 0f32);
+            for (l, v2) in layers.iter().zip(&dy) {
+                let r2 = (px - l.cx) * (px - l.cx) * l.inv_rx2 + v2;
+                if r2 >= 1.0 {
+                    continue;
+                }
+                let la = l.lut[(r2 * (LUT - 1) as f32) as usize];
+                // Source over, premultiplied.
+                let keep = 1.0 - la;
+                r = l.rgb[0] * la + r * keep;
+                g = l.rgb[1] * la + g * keep;
+                b = l.rgb[2] * la + b * keep;
+                a = la + a * keep;
+            }
+            if a > 0.0 {
+                let px = &mut row[x * 4..x * 4 + 4];
+                px[0] = (r * 255.0 + 0.5) as u8;
+                px[1] = (g * 255.0 + 0.5) as u8;
+                px[2] = (b * 255.0 + 0.5) as u8;
+                px[3] = (a * 255.0 + 0.5) as u8;
+            }
+        }
+    }
+
     let s = scale as f32;
     let cx = (GLOW_WIDTH / 2.0) as f32;
-    let group = Transform::from_translate(-cx, 0.0)
-        .post_scale(f.scale_x as f32, f.scale_y as f32)
-        .post_translate(cx, f.drop as f32)
-        .post_scale(s, s);
-    layer(pm, AURA, f.aura_tint, f.light, group);
-    layer(pm, HALO, f.tint, f.light, group);
-    layer(pm, CORE, f.core_tint, f.light * f.core, group);
-
     if f.bar > 0.0 {
         let at = |a: f32| Color::from_rgba8(WARM.0, WARM.1, WARM.2, (a * 255.0) as u8);
         let x0 = cx - f.bar as f32 / 2.0;
@@ -380,6 +480,37 @@ impl GlowAnim {
 mod tests {
     use super::*;
     use tiny_skia::Pixmap;
+
+    /// The per-pixel glow looks like the gradients it replaced: no channel more than a few
+    /// levels off, at several scales, squeezes and drops.
+    #[test]
+    fn per_pixel_matches_the_gradients() {
+        let frames = [
+            GlowFrame { tint: (120.0, 165.0, 255.0), core_tint: (187.0, 210.0, 255.0), aura_tint: (160.0, 130.0, 255.0), scale_x: 1.0, scale_y: 1.0, drop: 0.0, light: 1.0, core: 1.0, bar: 0.0 },
+            GlowFrame { tint: (60.0, 214.0, 160.0), core_tint: (157.0, 234.0, 207.0), aura_tint: (70.0, 200.0, 235.0), scale_x: 0.5, scale_y: 0.7, drop: 12.0, light: 0.6, core: 0.8, bar: 0.0 },
+        ];
+        for scale in [1.0, 1.5] {
+            for f in &frames {
+                let (w, h) = ((GLOW_WIDTH * scale) as u32, (GLOW_HEIGHT * scale) as u32);
+                let mut new = Pixmap::new(w, h).unwrap();
+                paint(&mut new.as_mut(), scale, f);
+                let mut old = Pixmap::new(w, h).unwrap();
+                let s = scale as f32;
+                let cx = (GLOW_WIDTH / 2.0) as f32;
+                let group = Transform::from_translate(-cx, 0.0)
+                    .post_scale(f.scale_x as f32, f.scale_y as f32)
+                    .post_translate(cx, f.drop as f32)
+                    .post_scale(s, s);
+                let mut pm = old.as_mut();
+                layer(&mut pm, AURA, f.aura_tint, f.light, group);
+                layer(&mut pm, HALO, f.tint, f.light, group);
+                layer(&mut pm, CORE, f.core_tint, f.light * f.core, group);
+                let worst = new.data().iter().zip(old.data()).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+                assert!(worst <= 6, "scale {scale}: a channel {worst} levels off");
+                assert!(new.data().iter().any(|v| *v > 0), "something is lit");
+            }
+        }
+    }
 
     #[test]
     fn colours() {

@@ -14,11 +14,12 @@ kilno.exe [folder] [--background]
 ## Main flows
 
 1. First launch: the setup window finds Claude Code and/or Codex, can install or sign in, and lets you choose the default. Reopen it with Settings > Agents.
-2. The sidebar lists sessions by project for both agents (each row marked with its agent's logo when both are used). Start a new session, resume one, or branch from one.
-3. Each pane header shows model, branch, context and effort; a status light shows working, done or needs you.
-4. The island at the top of the screen announces when a session needs you or is done, offers a picker, and accepts dropped files.
-5. Closing the window only hides it; quit from the gear menu.
-6. Ctrl+Alt+S is the screenshot shortcut. Only one of Kilno or Clayo can own it; the other shows it as taken in Settings > Island.
+2. The sidebar lists sessions by project for both agents (each row marked with its agent's logo when both are used). Start a new session, resume one, or branch from one. Right-click a row to rename it, close its pane, or hide it (Del): a hidden session and its branches move to the folded Hidden section at the bottom, and Unhide (or opening it) brings it back. Hiding keeps the transcript, so `claude --resume` still lists it. Drag a row to put its session (with its branches) somewhere else in its section; the sort switches to Custom and the order is kept.
+3. In a terminal, hold Ctrl over a local path (`C:\work\app.rs`, `src/main.rs:42`) and click it to show it in File Explorer: a folder opens, a file is selected in its folder. Relative paths are looked up in the pane's folder; only paths that exist are links.
+4. Each pane header shows model, branch, context and effort; a status light shows working, done or needs you.
+5. The island at the top of the screen announces when a session needs you or is done, offers a picker, and accepts dropped files.
+6. Closing the window only hides it; quit from the gear menu.
+7. Ctrl+Alt+S is the screenshot shortcut. Only one of Kilno or Clayo can own it; the other shows it as taken in Settings > Island.
 
 Per-agent differences and manual agent installs: [AGENTS.md](AGENTS.md).
 
@@ -28,7 +29,7 @@ Agents can write HTML pages to `<project>\.kilno\pages\*.html`. Kilno seals them
 
 ## Data and diagnostics
 
-- Data: `%LOCALAPPDATA%\Kilno` (`settings.json`, `names.json`, `parents.json`, `status\`, `crash.log`).
+- Data: `%LOCALAPPDATA%\Kilno` (`settings.json`, `names.json`, `parents.json`, `hidden.json`, `order.json`, `status\`, `turns\`, `crash.log`).
 - Moving from Clayo: copy `%LOCALAPPDATA%\Clayo\settings.json`, `names.json` and `parents.json` into `%LOCALAPPDATA%\Kilno`.
 - `KILNO_STARTUP_LOG=<file>` appends startup timing marks to that file.
-- Network: only the GitHub releases check of `tkhangg0910/kilno`.
+- Network: the GitHub releases check of `tkhangg0910/kilno`, and Anthropic's usage endpoint if you turn on live usage.

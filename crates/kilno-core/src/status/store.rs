@@ -18,11 +18,14 @@ pub const KEEP_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 type Stamp = (SystemTime, u64);
 
 type Listener = Arc<dyn Fn(&SessionStatus) + Send + Sync>;
+type LimitListener = Arc<dyn Fn() + Send + Sync>;
 
 /// Per-session statuses by id (ignoring case), following the folder once started.
 pub struct StatusStore {
     inner: Arc<Inner>,
     watcher: Mutex<Option<RecommendedWatcher>>,
+    /// Follows the folder holding `.claude.json`, when one is set.
+    claude_json_watcher: Mutex<Option<RecommendedWatcher>>,
 }
 
 struct Inner {
@@ -34,8 +37,11 @@ struct Inner {
     /// Its limits as of its last (modified time, length): a 200 kB file is not parsed again
     /// every clock tick when Claude Code has not touched it.
     claude_json_seen: Mutex<Option<(Stamp, Option<AccountLimits>)>>,
+    /// The last live usage reply ([`super::live`]), while live usage is on.
+    live: Mutex<Option<AccountLimits>>,
     by_id: Mutex<HashMap<String, SessionStatus>>,
     listeners: Mutex<Vec<Listener>>,
+    limit_listeners: Mutex<Vec<LimitListener>>,
 }
 
 impl StatusStore {
@@ -53,10 +59,13 @@ impl StatusStore {
                 usage_cache: usage_cache.into(),
                 claude_json: None,
                 claude_json_seen: Mutex::new(None),
+                live: Mutex::new(None),
                 by_id: Mutex::new(HashMap::new()),
                 listeners: Mutex::new(Vec::new()),
+                limit_listeners: Mutex::new(Vec::new()),
             }),
             watcher: Mutex::new(None),
+            claude_json_watcher: Mutex::new(None),
         }
     }
 
@@ -81,21 +90,55 @@ impl StatusStore {
             .cloned()
     }
 
-    /// The account's limits: the newest of a session report, the user's script's cache and
-    /// Claude Code's saved usage reply (on a tie, in that order). Some accounts' Claude Code
-    /// sends none in its reports at all. The per-model weekly limits come from the saved reply
-    /// whichever wins, as only it has them.
+    /// The account's limits: for each of the 5-hour and 7-day, the newest of the session
+    /// reports, the user's script's cache, Claude Code's saved usage reply and the live one (on a
+    /// tie, in that order; [`parse::merge`]), except that a live reply under [`super::live::FRESH`]
+    /// old wins outright. Some accounts' Claude Code sends none in its reports at all. The
+    /// per-model weekly limits come from the newer usage reply, as only those have them.
     pub fn limits(&self) -> Option<AccountLimits> {
-        let from_claude = parse::newest(lock(&self.inner.by_id).values());
         let cached = read_usage_cache(&self.inner.usage_cache);
         let saved = self.inner.claude_json();
-        let models = saved.as_ref().map(|s| s.models.clone()).unwrap_or_default();
-        let mut best = [from_claude, cached, saved]
+        let live = lock(&self.inner.live).clone();
+        // The model rows come whole from the newer of the two replies that have them.
+        let replies = [saved.clone(), live.clone()].into_iter().flatten();
+        let newest_reply = replies.reduce(|a, b| if b.updated > a.updated { b } else { a });
+        let models = newest_reply.as_ref().map(|s| s.models.clone()).unwrap_or_default();
+        let sessions: Vec<_> = lock(&self.inner.by_id)
+            .values()
+            .map(|s| (s.five_hour.clone(), s.seven_day.clone(), s.updated))
+            .collect();
+        let live_now = live.clone();
+        let files = [cached, saved, live]
             .into_iter()
             .flatten()
-            .reduce(|best, l| if l.updated > best.updated { l } else { best })?;
-        best.models = models;
-        Some(best)
+            .map(|l| (l.five_hour, l.seven_day, l.updated));
+        match parse::merge(sessions.into_iter().chain(files)) {
+            Some(mut best) => {
+                best.models = models;
+                // A recent live reply is what `/usage` says, so it beats a status line report even
+                // when that file is newer: Claude Code rewrites it with the same lagging numbers.
+                let fresh = chrono::Duration::from_std(super::live::FRESH).unwrap_or_default();
+                if let Some(l) = live_now.filter(|l| Utc::now() - l.updated <= fresh) {
+                    best.five_hour = l.five_hour.or(best.five_hour);
+                    best.seven_day = l.seven_day.or(best.seven_day);
+                    best.updated = best.updated.max(l.updated);
+                }
+                Some(best)
+            }
+            // A saved reply with only a model's limit still shows it.
+            None => newest_reply.filter(|s| !s.models.is_empty()),
+        }
+    }
+
+    /// The live usage reply, or None to forget it (live usage switched off).
+    pub fn set_live(&self, limits: Option<AccountLimits>) {
+        *lock(&self.inner.live) = limits;
+    }
+
+    /// Calls `f` (on the watcher's thread) when Claude Code's `.claude.json` changes, so a fresh
+    /// usage reply shows at once rather than on the next clock tick. Set before [`Self::start`].
+    pub fn on_limits_change(&self, f: impl Fn() + Send + Sync + 'static) {
+        lock(&self.inner.limit_listeners).push(Arc::new(f));
     }
 
     /// Creates the folder, starts following `*.json` in it, prunes files quiet for
@@ -124,12 +167,41 @@ impl StatusStore {
             .map_err(std::io::Error::other)?;
         *slot = Some(watcher);
         drop(slot);
+        self.watch_claude_json();
 
         prune(&self.inner.dir, Utc::now() - KEEP_FOR);
         for file in json_files(&self.inner.dir) {
             self.inner.load(&file);
         }
         Ok(())
+    }
+
+    /// Follows the folder holding `.claude.json` (only that file's events count; Claude Code may
+    /// write it through a temp file and a rename). Best effort: without it the clock still
+    /// picks a new reply up.
+    fn watch_claude_json(&self) {
+        let Some(path) = self.inner.claude_json.clone() else { return };
+        let (Some(dir), Some(name)) = (path.parent(), path.file_name().map(|n| n.to_os_string())) else {
+            return;
+        };
+        let inner = Arc::clone(&self.inner);
+        let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            let Ok(event) = res else { return };
+            if matches!(event.kind, EventKind::Access(_)) {
+                return;
+            }
+            if !event.paths.iter().any(|p| p.file_name() == Some(name.as_os_str())) {
+                return;
+            }
+            let listeners: Vec<LimitListener> = lock(&inner.limit_listeners).clone();
+            for f in listeners {
+                f();
+            }
+        });
+        let Ok(mut watcher) = watcher else { return };
+        if watcher.watch(dir, RecursiveMode::NonRecursive).is_ok() {
+            *lock(&self.claude_json_watcher) = Some(watcher);
+        }
     }
 
     /// Reads one file. Anything unreadable keeps the last good status.

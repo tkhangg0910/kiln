@@ -192,6 +192,16 @@ enum Item {
     Row(String, Bucket),
 }
 
+/// A drawn session row: where it is and what it can be dropped among (same section, and same
+/// folder when grouped by folder).
+struct RowHit {
+    id: String,
+    rect: Rect,
+    /// Its top-level session: a thread moves as one.
+    root: String,
+    group: (Bucket, String),
+}
+
 #[derive(Default)]
 struct ListCache {
     key: Option<(u64, ViewOptions, i64)>,
@@ -206,6 +216,11 @@ enum Action {
     StartRename(String),
     CommitRename(String, String),
     ResetName(String),
+    /// Close the session's pane (the agent is asked to quit first).
+    Close(String),
+    /// Move a session (and its branches) to Hidden; its pane closes. Nothing is deleted.
+    Hide(String),
+    Unhide(String),
     NewIn(String),
     Browse,
     StartWith(AgentKind),
@@ -249,6 +264,12 @@ pub struct KilnoApp {
     view: ViewOptions,
     sections: HashMap<Bucket, bool>,
     selected: Option<String>,
+    /// The session row being dragged to a new place, if one is.
+    drag: Option<String>,
+    /// This frame's drawn rows, for dropping a dragged one.
+    row_hits: Vec<RowHit>,
+    /// Follows Claude's hook events ([`kilno_core::status::hooks`]); dropped, it stops.
+    _turns: Option<Box<dyn std::any::Any + Send>>,
     list_focus: bool,
     rename: Option<Rename>,
     cache: ListCache,
@@ -387,6 +408,18 @@ impl KilnoApp {
                 let _ = LoginStartup::for_this_user(&data).keep(&exe);
             }
         }
+        // A Claude hook's event goes to the pane open on its session.
+        let turns = {
+            let m = model.clone();
+            kilno_core::status::hooks::watch(&kilno_core::status::hooks::turns_dir(&data), move |id, hook| {
+                let pane = lock(&m).panes.iter().find(|p| p.session_id().is_some_and(|s| s.eq_ignore_ascii_case(&id))).cloned();
+                if let Some(p) = pane {
+                    p.show_hook(hook);
+                }
+            })
+        };
+        // Once you have dragged sessions, the list opens in that order.
+        let sort = if lock(&model).order.is_empty() { SortMode::Newest } else { SortMode::Custom };
         let updater = Updater::start(settings.update_check, waker.clone());
 
         let mut app = Self {
@@ -404,9 +437,12 @@ impl KilnoApp {
             ticker: Ticker::start(),
             font: TermFont::default(),
             folder: start.folder.clone().unwrap_or(home),
-            view: ViewOptions::default(),
+            view: ViewOptions { sort, ..ViewOptions::default() },
             sections: HashMap::from([(Bucket::Open, true), (Bucket::Today, true), (Bucket::Earlier, false)]),
             selected: None,
+            drag: None,
+            row_hits: Vec::new(),
+            _turns: turns,
             list_focus: false,
             rename: None,
             cache: ListCache::default(),
@@ -766,6 +802,21 @@ impl KilnoApp {
 
     /// Ends the session: the process goes and its row drops out of Open. A Codex pane closed
     /// before its transcript appeared has no session to list. The last pane left takes over.
+    /// The pane a session is open in, if any.
+    fn pane_of(&self, session_id: &str) -> Option<u64> {
+        lock(&self.model).sidebar.get(session_id).and_then(|r| r.pane.as_ref()).map(|p| p.id)
+    }
+
+    /// Back in the list: the session and any hidden parent above it (a branch under a hidden
+    /// parent would stay hidden otherwise).
+    fn unhide(&mut self, session_id: &str) {
+        let mut m = lock(&self.model);
+        for id in m.sidebar.lineage(session_id) {
+            m.hidden.unhide(&id);
+        }
+        m.generation += 1;
+    }
+
     fn close_pane(&mut self, id: u64) {
         let Some(i) = self.panes.iter().position(|p| p.id() == id) else { return };
         // Dropped at the end of this function: Pane::drop asks the agent to quit, then kills it.
@@ -885,7 +936,27 @@ impl KilnoApp {
                         self.activate(p);
                     }
                 }
-                Action::Open(id) => self.open_row(&id),
+                Action::Open(id) => {
+                    // Opening a hidden session brings it back to the list.
+                    if lock(&self.model).sidebar.get(&id).is_some_and(|r| r.hidden) {
+                        self.unhide(&id);
+                    }
+                    self.open_row(&id);
+                }
+                Action::Close(id) => {
+                    if let Some(p) = self.pane_of(&id) {
+                        self.close_pane(p);
+                    }
+                }
+                Action::Hide(id) => {
+                    if let Some(p) = self.pane_of(&id) {
+                        self.close_pane(p);
+                    }
+                    let mut m = lock(&self.model);
+                    m.hidden.hide(&id, Utc::now());
+                    m.generation += 1;
+                }
+                Action::Unhide(id) => self.unhide(&id),
                 Action::StartRename(id) => {
                     let text = lock(&self.model).sidebar.get(&id).map(|r| r.edit_text());
                     if let Some(text) = text {
@@ -1094,6 +1165,10 @@ impl KilnoApp {
         let m = &mut *m;
         let parents = &m.parents;
         m.sidebar.link_threads(|id| parents.get(id).map(String::from), self.view.sort != SortMode::Oldest, now);
+        let hidden = &m.hidden;
+        m.sidebar.mark_hidden(|id| hidden.is_hidden(id));
+        let order = &m.order;
+        m.sidebar.mark_order(|id| order.rank(id));
         let rows = m.sidebar.view(&self.view, now, &Local);
         let signature = sidebar::layout_signature(&rows, self.view.group_by_folder, now, &Local);
         let mut items = Vec::new();
@@ -1208,10 +1283,11 @@ impl KilnoApp {
                 SortMode::Newest => "Newest",
                 SortMode::Oldest => "Oldest",
                 SortMode::Name => "Name",
+                SortMode::Custom => "Custom",
             };
             let r = tiny_combo(ui, sort);
             tiny_popup(&r, |ui| {
-                for (label, v) in [("Newest", SortMode::Newest), ("Oldest", SortMode::Oldest), ("Name", SortMode::Name)] {
+                for (label, v) in [("Newest", SortMode::Newest), ("Oldest", SortMode::Oldest), ("Name", SortMode::Name), ("Custom", SortMode::Custom)] {
                     if tiny_item(ui, label, self.view.sort == v).clicked() {
                         self.view.sort = v;
                         ui.close();
@@ -1234,6 +1310,8 @@ impl KilnoApp {
         }
         let model = self.model.clone();
         let items = std::mem::take(&mut self.cache.items);
+        self.row_hits.clear();
+        let mut dropped = None;
         sa.show(ui, |ui| {
             let m = lock(&model);
             for item in &items {
@@ -1249,18 +1327,78 @@ impl KilnoApp {
                             folder_header(ui, name, *n);
                         }
                     }
-                    Item::Row(id, _) => {
+                    Item::Row(id, b) => {
                         if !self.section_open(item) {
                             continue;
                         }
                         if let Some(row) = m.sidebar.get(id) {
-                            self.draw_row(ui, row, now);
+                            let rect = self.draw_row(ui, row, now);
+                            let folder = if self.view.group_by_folder { row.project().to_lowercase() } else { String::new() };
+                            self.row_hits.push(RowHit { id: id.clone(), rect, root: m.sidebar.root_of(id), group: (*b, folder) });
                         }
                     }
                 }
             }
+            dropped = self.drag_feedback(ui);
         });
         self.cache.items = items;
+        if let Some((moved, target, after)) = dropped {
+            self.drop_session(&moved, &target, after);
+        }
+    }
+
+    /// While a row is dragged: the line where it would land, among the threads of its own
+    /// section (and folder). On release, the (moved, target, after) to apply.
+    fn drag_feedback(&mut self, ui: &Ui) -> Option<(String, String, bool)> {
+        let id = self.drag.clone()?;
+        let (pos, down, released) = ui.input(|i| (i.pointer.interact_pos(), i.pointer.primary_down(), i.pointer.any_released()));
+        if !down && !released {
+            self.drag = None;
+            return None;
+        }
+        ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
+        let from = self.row_hits.iter().find(|h| h.id.eq_ignore_ascii_case(&id))?;
+        let (moved, group) = (from.root.clone(), from.group.clone());
+        // Each other thread of the group as one block: its rows' union.
+        let mut blocks: Vec<(String, Rect)> = Vec::new();
+        for h in self.row_hits.iter().filter(|h| h.group == group && !h.root.eq_ignore_ascii_case(&moved)) {
+            match blocks.iter_mut().find(|(r, _)| r.eq_ignore_ascii_case(&h.root)) {
+                Some((_, rect)) => *rect = rect.union(h.rect),
+                None => blocks.push((h.root.clone(), h.rect)),
+            }
+        }
+        let pos = pos?;
+        let dist = |r: &Rect| if r.y_range().contains(pos.y) { 0.0 } else { (pos.y - r.center().y).abs() };
+        let (target, rect) = blocks.iter().min_by(|a, b| dist(&a.1).total_cmp(&dist(&b.1)))?.clone();
+        let after = pos.y > rect.center().y;
+        let y = if after { rect.bottom() } else { rect.top() };
+        ui.painter().hline(rect.x_range(), y, Stroke::new(2.0, WORKING));
+        if released {
+            self.drag = None;
+            return Some((moved, target, after));
+        }
+        None
+    }
+
+    /// A dragged thread dropped by another: the section's threads are ranked in their new order
+    /// and the list switches to Custom.
+    fn drop_session(&mut self, moved: &str, target: &str, after: bool) {
+        let Some(group) = self.row_hits.iter().find(|h| h.root.eq_ignore_ascii_case(moved)).map(|h| h.group.clone()) else { return };
+        let mut roots: Vec<String> = Vec::new();
+        for h in self.row_hits.iter().filter(|h| h.group == group) {
+            if !roots.iter().any(|r| r.eq_ignore_ascii_case(&h.root)) {
+                roots.push(h.root.clone());
+            }
+        }
+        let order = kilno_core::store::order::move_to(&roots, moved, target, after);
+        if order == roots {
+            return;
+        }
+        let mut m = lock(&self.model);
+        m.order.set(&order);
+        m.generation += 1;
+        drop(m);
+        self.view.sort = SortMode::Custom;
     }
 
     fn section_open(&self, item: &Item) -> bool {
@@ -1272,9 +1410,13 @@ impl KilnoApp {
         }
     }
 
-    fn draw_row(&mut self, ui: &mut Ui, row: &sidebar::SessionRow, now: chrono::DateTime<Utc>) {
+    /// One session row; returns where it was drawn. Dragging it moves its thread.
+    fn draw_row(&mut self, ui: &mut Ui, row: &sidebar::SessionRow, now: chrono::DateTime<Utc>) -> Rect {
         let w = ui.available_width();
-        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, ROW_H), Sense::click());
+        let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, ROW_H), Sense::click_and_drag());
+        if resp.drag_started() && self.rename.is_none() {
+            self.drag = Some(row.session_id.clone());
+        }
         let id = &row.session_id;
         let selected = self.selected.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(id));
         if ui.is_rect_visible(rect) {
@@ -1329,6 +1471,10 @@ impl KilnoApp {
                 self.actions.push(Action::Open(id.clone()));
                 ui.close();
             }
+            if row.is_open() && menu_item(ui, "Close", None, None, true).clicked() {
+                self.actions.push(Action::Close(id.clone()));
+                ui.close();
+            }
             if menu_item(ui, "Rename", Some("F2"), None, true).clicked() {
                 self.actions.push(Action::StartRename(id.clone()));
                 ui.close();
@@ -1338,7 +1484,23 @@ impl KilnoApp {
                 self.actions.push(Action::ResetName(id.clone()));
                 ui.close();
             }
+            menu_separator(ui);
+            if row.hidden && !row.is_open() {
+                if menu_item(ui, "Unhide", None, None, true).clicked() {
+                    self.actions.push(Action::Unhide(id.clone()));
+                    ui.close();
+                }
+            } else {
+                let label = if row.is_open() { "Close and hide" } else { "Hide" };
+                let r = menu_item(ui, label, Some("Del"), None, true)
+                    .on_hover_text("Moves it (and its branches) to Hidden at the bottom of the list. The transcript is kept.");
+                if r.clicked() {
+                    self.actions.push(Action::Hide(id.clone()));
+                    ui.close();
+                }
+            }
         });
+        rect
     }
 
     /// The in-row rename box: focused with everything selected; Enter or leaving it commits,
@@ -1399,7 +1561,9 @@ impl KilnoApp {
         let limits_h = status_view::limits_height(ui, &self.status_frame.meters, self.settings.theme);
         if limits_h > 0.0 {
             let r = Rect::from_min_max(Pos2::new(rect.left() + 14.0, top), Pos2::new(rect.right() - 14.0, top + limits_h));
-            status_view::draw_limits(ui, r, &self.status_frame.meters, self.settings.theme);
+            if status_view::draw_limits(ui, r, &self.status_frame.meters, self.settings.theme) {
+                self.status.refresh();
+            }
             top += limits_h + 12.0;
         }
         if let Some((text, tip)) = self.update.button() {
@@ -1695,6 +1859,12 @@ impl KilnoApp {
                 ctx.copy_text(text);
             }
             links.extend(out.link);
+            if let Some(path) = out.open_path {
+                #[cfg(windows)]
+                win::shell::reveal(&path);
+                #[cfg(not(windows))]
+                let _ = path;
+            }
             paste = out.paste_requested;
         }
         if let Some(v) = pane.doc.as_mut() {
@@ -1755,12 +1925,13 @@ impl KilnoApp {
             && !ctx.memory(|m| m.focused() == Some(Id::NULL.with("search")))
             && self.rename.is_none();
         // Ctrl+, opens Settings, Esc closes it; inside a terminal these keys are the agent's.
-        let (comma, esc, f2, enter) = ctx.input(|i| {
+        let (comma, esc, f2, enter, del) = ctx.input(|i| {
             (
                 i.modifiers.command_only() && i.key_pressed(Key::Comma),
                 i.key_pressed(Key::Escape),
                 i.key_pressed(Key::F2),
                 i.key_pressed(Key::Enter),
+                i.key_pressed(Key::Delete),
             )
         });
         if comma && (!term_focused || self.settings_open) {
@@ -1775,6 +1946,11 @@ impl KilnoApp {
                     self.actions.push(Action::StartRename(id));
                 } else if enter {
                     self.actions.push(Action::Open(id));
+                } else if del {
+                    let hidden = lock(&self.model).sidebar.get(&id).is_some_and(|r| r.hidden && !r.is_open());
+                    if !hidden {
+                        self.actions.push(Action::Hide(id));
+                    }
                 }
             }
         }
@@ -1856,7 +2032,14 @@ impl KilnoApp {
             let git = self.status.git.get(&pane.cwd.to_string_lossy());
             strip::header(session.as_ref(), git.as_ref(), limits.as_ref(), &self.settings, now)
         });
-        StatusFrame { strip, meters: strip::footer(limits.as_ref(), &self.settings, now) }
+        let mut meters = strip::footer(limits.as_ref(), &self.settings, now);
+        if let Some(l) = &limits {
+            let as_of = l.updated.with_timezone(&chrono::Local).format("%H:%M");
+            for m in &mut meters {
+                m.tip.push_str(&format!("\nAs of {as_of}. Click to read again."));
+            }
+        }
+        StatusFrame { strip, meters }
     }
 
     /// The newest limits any Codex transcript reported, not the open session's (as old as its

@@ -39,6 +39,21 @@ impl IdMap {
         self.save();
     }
 
+    /// Several at once, saved once.
+    pub(crate) fn set_many(&mut self, items: impl IntoIterator<Item = (String, String)>) {
+        for (id, value) in items {
+            match self.find(&id) {
+                Some(i) => self.entries[i].1 = value,
+                None => self.entries.push((id, value)),
+            }
+        }
+        self.save();
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     pub(crate) fn remove(&mut self, id: &str) {
         if let Some(i) = self.find(id) {
             self.entries.remove(i);

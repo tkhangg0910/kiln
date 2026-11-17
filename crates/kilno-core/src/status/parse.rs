@@ -101,24 +101,41 @@ pub fn parse_usage_cache(json: &str, updated: DateTime<Utc>) -> Option<AccountLi
     })
 }
 
-/// The limits are the account's, not a session's, so the newest report wins. A session that
-/// has not called the API yet has none and must not blank the ones we have. On a tie the first
-/// one wins (as .NET's MaxBy).
+/// The limits are the account's, not a session's, so the newest report wins: see [`merge`].
 pub fn newest<'a>(statuses: impl IntoIterator<Item = &'a SessionStatus>) -> Option<AccountLimits> {
-    let mut best: Option<&SessionStatus> = None;
-    for s in statuses
-        .into_iter()
-        .filter(|s| s.five_hour.is_some() || s.seven_day.is_some())
-    {
-        if best.is_none_or(|b| s.updated > b.updated) {
-            best = Some(s);
+    merge(
+        statuses
+            .into_iter()
+            .map(|s| (s.five_hour.clone(), s.seven_day.clone(), s.updated)),
+    )
+}
+
+/// The newest report of each limit, chosen on its own: a report without a limit never blanks
+/// the one we have. A session that has not called the API yet has none, and right after the
+/// 5-hour window resets Claude Code reports only the 7-day one until the next request. On a tie
+/// the first report wins (as .NET's MaxBy). `updated` is the newest of the chosen reports.
+pub fn merge(
+    reports: impl IntoIterator<Item = (Option<Limit>, Option<Limit>, DateTime<Utc>)>,
+) -> Option<AccountLimits> {
+    type Slot = Option<(Limit, DateTime<Utc>)>;
+    fn keep(slot: &mut Slot, limit: Option<Limit>, at: DateTime<Utc>) {
+        if let Some(limit) = limit {
+            if slot.as_ref().is_none_or(|(_, t)| at > *t) {
+                *slot = Some((limit, at));
+            }
         }
     }
-    best.map(|s| AccountLimits {
-        five_hour: s.five_hour.clone(),
-        seven_day: s.seven_day.clone(),
+    let (mut five_hour, mut seven_day): (Slot, Slot) = (None, None);
+    for (h5, d7, at) in reports {
+        keep(&mut five_hour, h5, at);
+        keep(&mut seven_day, d7, at);
+    }
+    let updated = five_hour.iter().chain(seven_day.iter()).map(|(_, t)| *t).max()?;
+    Some(AccountLimits {
+        five_hour: five_hour.map(|(l, _)| l),
+        seven_day: seven_day.map(|(l, _)| l),
         models: Vec::new(),
-        updated: s.updated,
+        updated,
     })
 }
 

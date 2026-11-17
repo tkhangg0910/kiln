@@ -38,8 +38,9 @@ kilno-app   (eframe/egui UI, setup + settings windows, glue)
 1. **Pane output**: child process -> ConPTY -> read thread (`kilno-pty`) -> `Terminal::feed` (`kilno-term`) -> egui draws a frame.
 2. **Pane input**: egui events -> `kilno-term::input` encoding -> PTY write.
 3. **Sessions**: a sessions thread watches the agents' folders (read-only) and feeds the sidebar model. Pane events are handled in `App::logic`, which keeps running while the window is hidden (closing the window only hides it).
-4. **Status**: Claude panes start with a status line that runs `kilno.exe --statusline [--pass]`. Claude Code pipes session JSON to it on every refresh; Kilno stores a copy and, with `--pass`, forwards the same bytes to the user's own status line command. `main()` handles this argument before any window, font or mutex exists, because it runs on every refresh. The account's limits are the newest of these reports, the user's script's usage cache and the usage reply Claude Code saves in `.claude.json` (`kilno-core::status::claude_usage`, parsed again only when the file's stamp changes); a model's own weekly limit (Fable) is found only in the last.
-5. **Island**: `kilno-core::island::trigger` decides when to show; `kilno-island` draws; requests that touch panes go back to the UI as `AppEvent::Island` via `island_host`.
+4. **Status**: Claude panes start with a status line that runs `kilno.exe --statusline [--pass]`. Claude Code pipes session JSON to it on every refresh; Kilno stores a copy and, with `--pass`, forwards the same bytes to the user's own status line command. `main()` handles this argument before any window, font or mutex exists, because it runs on every refresh. For each of the account's 5-hour and 7-day limits Kilno takes the newest of these reports, the user's script's usage cache and the usage reply Claude Code saves in `.claude.json` (`kilno-core::status::claude_usage`, followed with a watcher and parsed again only when the file's stamp changes), so a report without one never blanks it; past its reset time a limit shows 0 %. With live usage on (`kilno-core::status::live`, a thread in `kilno-app::status`), a reply from Anthropic's usage endpoint under ten minutes old wins outright, as the status line's numbers lag behind it; a model's own weekly limit (Fable) is found only in the last.
+5. **Turns**: Claude panes' `--settings` also add `UserPromptSubmit`, `Stop` and `Notification` hooks that run `kilno.exe --hook <event>` (handled first thing in `main()`, like the status line), which writes `<data>\turns\<session>.txt`. A watcher hands each event to the pane's tracker (`kilno-core::status::hooks`, `PaneStatusTracker::on_hook`): from the first one, working and done come from hooks, not from guessing at the output, whose idle redraws used to read as a finished turn. Without hooks the output still decides.
+6. **Island**: `kilno-core::island::trigger` decides when to show; `kilno-island` draws; requests that touch panes go back to the UI as `AppEvent::Island` via `island_host`.
 
 ## Process model
 
@@ -51,7 +52,7 @@ kilno-app   (eframe/egui UI, setup + settings windows, glue)
 
 ## Read-only guarantee
 
-Paths under the agents' folders are `ReadOnlyDir` values: joinable and readable, never writable. `crates/kilno-core/tests/invariants.rs` guards this. Claude Code's `.claude.json` is only ever read, too. Kilno writes only to `%LOCALAPPDATA%\Kilno`, the `Run` registry value, and the user `Path`.
+Paths under the agents' folders are `ReadOnlyDir` values: joinable and readable, never writable. `crates/kilno-core/tests/invariants.rs` guards this. Claude Code's `.claude.json` is only ever read, too, and so is `.credentials.json` (only its access token, only with live usage on). Kilno writes only to `%LOCALAPPDATA%\Kilno`, the `Run` registry value, and the user `Path`.
 
 ## Rendering and safety
 

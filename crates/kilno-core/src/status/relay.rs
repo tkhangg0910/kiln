@@ -15,6 +15,7 @@
 //! [`run`] is on the path of every status refresh: it must stay cheap (no UI, no logging).
 
 use crate::paths::{DataDir, ReadOnlyDir};
+use crate::pane_status::Hook;
 use crate::settings::push_json_string;
 use serde_json::{Map, Value};
 use std::io::{Read, Write};
@@ -98,10 +99,8 @@ pub fn settings_json(
     // braces give their whole command our output, even a `cd x && ./line.sh`; the newlines keep
     // a trailing # comment of theirs from eating the closing brace. Single quotes, so a $ or `
     // in the path stays text.
-    let relay = format!(
-        "'{}' {ARG}",
-        exe_path.replace('\\', "/").replace('\'', "'\\''")
-    );
+    let exe = format!("'{}'", exe_path.replace('\\', "/").replace('\'', "'\\''"));
+    let relay = format!("{exe} {ARG}");
     status_line.insert("type".into(), Value::from("command"));
     let command = match theirs {
         Some(c) => format!("{relay} {PASS_ARG} | {{\n{c}\n}}"),
@@ -116,6 +115,18 @@ pub fn settings_json(
         permissions.insert("ask".into(), Value::from(ask.to_vec()));
         settings.insert("permissions".into(), Value::Object(permissions));
     }
+    // The turn, told exactly ([`super::hooks`]). Added to the user's own hooks, not instead.
+    let mut hooks = Map::new();
+    for (event, hook) in [("UserPromptSubmit", Hook::Working), ("Stop", Hook::Done), ("Notification", Hook::Ask)] {
+        let command = format!("{exe} {} {}", super::hooks::ARG, super::hooks::name(hook));
+        let mut cmd = Map::new();
+        cmd.insert("type".into(), Value::from("command"));
+        cmd.insert("command".into(), Value::from(command));
+        let mut group = Map::new();
+        group.insert("hooks".into(), Value::Array(vec![Value::Object(cmd)]));
+        hooks.insert(event.into(), Value::Array(vec![Value::Object(group)]));
+    }
+    settings.insert("hooks".into(), Value::Object(hooks));
     let mut out = String::new();
     push_compact(&mut out, &Value::Object(settings));
     out

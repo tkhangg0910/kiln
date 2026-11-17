@@ -23,6 +23,8 @@ use crate::{Cmd, IslandHost, PickChoice, WM_WAKE};
 
 const POLL: usize = 1;
 const FRAME: usize = 2;
+/// The glow's frame interval while only its breath moves.
+const BREATH_FRAME_MS: i64 = 50;
 const POLL_NEAR: u32 = 50;
 const POLL_FAR: u32 = 250;
 
@@ -83,6 +85,9 @@ struct Island {
     frame_ms: Option<u32>,
     island_was_animating: bool,
     glow_was_animating: bool,
+    /// When the glow was last painted: while it only breathes it is painted every
+    /// [`BREATH_FRAME_MS`], not on every island frame.
+    glow_drawn_at: i64,
     busy: bool,
     busy_checked_at: i64,
     esc_was_down: bool,
@@ -145,6 +150,7 @@ impl Island {
             frame_ms: None,
             island_was_animating: false,
             glow_was_animating: false,
+            glow_drawn_at: i64::MIN / 2,
             busy: false,
             busy_checked_at: -1000,
             esc_was_down: false,
@@ -561,8 +567,11 @@ impl Island {
             None
         } else if self.tweening(now) {
             Some(16)
-        } else if self.island_animating(now) || self.glow.animating(now) {
+        } else if self.island_animating(now) || (self.glow.animating(now) && !self.glow.breathing_only(now)) {
             Some(33)
+        } else if self.glow.animating(now) {
+            // Only the breath moves: its own slower frame.
+            Some(BREATH_FRAME_MS as u32)
         } else {
             None
         };
@@ -587,7 +596,12 @@ impl Island {
             self.redraw();
         }
         if glow || self.glow_was_animating {
-            self.redraw_glow();
+            // A slow breath needs no more than 20 fps; anything else moving gets every frame.
+            let breath_only = glow && self.glow.breathing_only(now);
+            if !breath_only || now - self.glow_drawn_at >= BREATH_FRAME_MS {
+                self.redraw_glow();
+                self.glow_drawn_at = now;
+            }
         }
         self.island_was_animating = island;
         self.glow_was_animating = glow;

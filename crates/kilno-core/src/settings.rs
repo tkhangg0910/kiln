@@ -74,6 +74,11 @@ pub struct KilnoSettings {
     pub reserve_five_hour: bool,
     pub reserve_seven_day: bool,
     pub reserve_model_weekly: bool,
+    /// Ask Anthropic's usage endpoint for the limits with the Claude sign-in (off unless the
+    /// user turns it on): the numbers `/usage` shows, not the status line's older ones.
+    pub live_usage: bool,
+    /// How often, in minutes, while it is on: one of [`LIVE_USAGE_STEPS`].
+    pub live_usage_minutes: i32,
     pub theme: StatusTheme,
     pub setup_done: bool,
     pub use_claude: bool,
@@ -108,6 +113,8 @@ impl Default for KilnoSettings {
             reserve_five_hour: true,
             reserve_seven_day: true,
             reserve_model_weekly: true,
+            live_usage: false,
+            live_usage_minutes: 2,
             theme: StatusTheme::Numbers,
             setup_done: false,
             use_claude: true,
@@ -127,6 +134,9 @@ impl Default for KilnoSettings {
 
 /// The reserve thresholds Settings offers, in percent. 0 is off.
 pub const RESERVE_STEPS: [i32; 4] = [0, 70, 80, 90];
+
+/// The live usage intervals offered, in minutes.
+pub const LIVE_USAGE_STEPS: [i32; 3] = [1, 2, 5];
 
 /// `<data dir>\settings.json`.
 pub fn default_path(data: &DataDir) -> PathBuf {
@@ -210,6 +220,12 @@ impl KilnoSettings {
                     .find(|v| v.name().eq_ignore_ascii_case(&t))
             })
             .unwrap_or(d.default_agent);
+        let live_usage_minutes = root
+            .get("liveUsageMinutes")
+            .and_then(Value::as_i64)
+            .and_then(|n| i32::try_from(n).ok())
+            .filter(|n| LIVE_USAGE_STEPS.contains(n))
+            .unwrap_or(d.live_usage_minutes);
         let reserve_at = root
             .get("reserveAt")
             .and_then(Value::as_i64)
@@ -231,6 +247,8 @@ impl KilnoSettings {
             reserve_five_hour: b("reserveFiveHour", d.reserve_five_hour),
             reserve_seven_day: b("reserveSevenDay", d.reserve_seven_day),
             reserve_model_weekly: b("reserveModelWeekly", d.reserve_model_weekly),
+            live_usage: b("liveUsage", d.live_usage),
+            live_usage_minutes,
             theme,
             setup_done: b("setupDone", d.setup_done),
             use_claude: b("useClaude", d.use_claude),
@@ -267,6 +285,12 @@ impl KilnoSettings {
         w.bool("reserveSevenDay", self.reserve_seven_day);
         if !self.reserve_model_weekly {
             w.bool("reserveModelWeekly", false);
+        }
+        if self.live_usage {
+            w.bool("liveUsage", true);
+        }
+        if self.live_usage_minutes != Self::default().live_usage_minutes {
+            w.raw("liveUsageMinutes", &self.live_usage_minutes.to_string());
         }
         w.str("theme", &self.theme.name().to_lowercase());
         w.bool("setupDone", self.setup_done);
