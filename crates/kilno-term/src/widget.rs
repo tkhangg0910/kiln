@@ -47,6 +47,14 @@ pub struct ViewState {
     active_at: Option<Instant>,
     had_focus: bool,
     scroll_accum: f32,
+    /// The pane's folder: relative paths in its text are looked up under it.
+    pub cwd: Option<std::path::PathBuf>,
+    /// The local path under the pointer while Ctrl is held: (display row, first column, end
+    /// column), underlined.
+    path_hover: Option<(i32, usize, usize)>,
+    /// The last candidate looked up and what it resolved to, so a held pointer does not ask
+    /// the disk every frame.
+    path_cache: Option<(String, Option<std::path::PathBuf>)>,
 }
 
 /// What happened this frame that the pane must act on.
@@ -62,6 +70,8 @@ pub struct ViewOutput {
     pub resized: Option<GridSize>,
     /// An OSC 8 hyperlink was clicked; the pane confirms before opening it.
     pub link: Option<String>,
+    /// A local path was Ctrl+clicked: shown in File Explorer.
+    pub open_path: Option<std::path::PathBuf>,
     /// The widget gained (true) or lost (false) keyboard focus this frame.
     pub focus_changed: Option<bool>,
 }
@@ -195,6 +205,11 @@ pub fn show(ui: &mut Ui, term: &Terminal, state: &mut ViewState, tf: &TermFont, 
 
     if visible {
         paint(ui, term, state, rect, origin, cell, tf, focused, &response);
+        if let Some((row, s, e)) = state.path_hover {
+            let y = origin.y + (row + 1) as f32 * cell.y - 1.5;
+            let x = |c: usize| origin.x + c as f32 * cell.x;
+            ui.painter_at(rect).hline(x(s)..=x(e), y, egui::Stroke::new(1.0, c32(palette::FOREGROUND)));
+        }
     }
     if focused {
         // The IME candidate window sits at the cursor cell.
@@ -253,6 +268,15 @@ fn handle_pointer(
                     PointerButton::Secondary => MouseButton::Right,
                     _ => continue,
                 };
+                // Ctrl+click on a local path shows it in Explorer, even while the app reports the mouse.
+                if b == MouseButton::Left && modifiers.ctrl && rect.contains(*pos) {
+                    if let Some((path, _, _)) = path_at(term, state, pt) {
+                        if *pressed {
+                            out.open_path = Some(path);
+                        }
+                        continue;
+                    }
+                }
                 if report {
                     let act = if *pressed { MouseAction::Press } else { MouseAction::Release };
                     let vp = (pt.column.0, (pt.line.0 + offset as i32).max(0) as usize);
@@ -354,9 +378,53 @@ fn handle_pointer(
     }
     if hovered {
         let pos = ui.input(|i| i.pointer.hover_pos());
-        let on_link = pos.is_some_and(|p| link_at(term, point_at(p, origin, cell, size, offset).0).is_some());
-        ui.ctx().set_cursor_icon(if on_link { CursorIcon::PointingHand } else { CursorIcon::Text });
+        let pt = pos.map(|p| point_at(p, origin, cell, size, offset).0);
+        let on_link = pt.is_some_and(|pt| link_at(term, pt).is_some());
+        state.path_hover = match pt {
+            Some(pt) if mods.ctrl && !on_link => {
+                path_at(term, state, pt).map(|(_, s, e)| (pt.line.0 + offset as i32, s, e))
+            }
+            _ => {
+                // Asked again on the next Ctrl: a file may have appeared since.
+                if !mods.ctrl {
+                    state.path_cache = None;
+                }
+                None
+            }
+        };
+        let hand = on_link || state.path_hover.is_some();
+        ui.ctx().set_cursor_icon(if hand { CursorIcon::PointingHand } else { CursorIcon::Text });
+    } else {
+        state.path_hover = None;
     }
+}
+
+/// The existing local path under `pt` and the columns it covers on that row.
+fn path_at(term: &Terminal, state: &mut ViewState, pt: Point) -> Option<(std::path::PathBuf, usize, usize)> {
+    let row: Vec<char> = {
+        let t = term.lock();
+        let g = t.grid();
+        if pt.line.0 < -(g.history_size() as i32) || pt.line.0 >= g.screen_lines() as i32 {
+            return None;
+        }
+        let r = &g[pt.line];
+        (0..g.columns())
+            .map(|c| {
+                let cell = &r[Column(c)];
+                if cell.flags.contains(Flags::WIDE_CHAR_SPACER) { '\u{FFFF}' } else { cell.c }
+            })
+            .collect()
+    };
+    let (text, s, e) = crate::paths::candidate(&row, pt.column.0)?;
+    let found = match &state.path_cache {
+        Some((t, found)) if *t == text => found.clone(),
+        _ => {
+            let found = crate::paths::resolve(&text, state.cwd.as_deref());
+            state.path_cache = Some((text, found.clone()));
+            found
+        }
+    };
+    found.map(|p| (p, s, e))
 }
 
 fn link_at(term: &Terminal, pt: Point) -> Option<String> {

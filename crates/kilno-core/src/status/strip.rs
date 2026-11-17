@@ -176,14 +176,14 @@ pub fn model_reserve(s: &KilnoSettings) -> i32 {
 
 fn meter(name: &str, label: &str, limit: &Limit, now: DateTime<Utc>, reserve_at: i32) -> Meter {
     // Limits only change when Claude refreshes its status line, so past the reset the number is
-    // the old window's, not the current use.
+    // the old window's: the new one starts empty, until the next report says otherwise.
     if is_stale(limit, now) {
         return Meter {
             label: label.into(),
             detail: None,
-            percent: limit.percent,
+            percent: 0,
             tip: format!(
-                "{name} limit: reset since the last report, which said {}%",
+                "{name} limit: reset since the last report (which said {}%); a new window starts at 0%",
                 limit.percent
             ),
             stale: true,

@@ -865,3 +865,56 @@ fn bind_window_parent_compare_is_case_sensitive() {
     let panes = [ub("C:\\p", Some("abc"), 0), ub("C:\\p", Some("ABC"), 1)];
     assert_eq!(codex_bind_window(&panes, 0), (t(0), t(10)));
 }
+
+// --------------------------------------------------------------- hiding
+
+#[test]
+fn hiding_a_session_hides_its_branches_but_not_an_open_one() {
+    let mut sb = threaded();
+    sb.link_threads(|id| (id == "grand").then(|| "child".to_string()), true, now());
+    sb.mark_hidden(|id| id == "root");
+    for id in ["root", "child", "grand"] {
+        assert!(sb.get(id).unwrap().hidden, "{id}: hidden with its parent");
+        assert_eq!(sb.get(id).unwrap().bucket(now(), &utc()), Bucket::Hidden);
+    }
+    assert!(!sb.get("other").unwrap().hidden, "an unrelated session stays");
+
+    let rows = sb.view(&ViewOptions::default(), now(), &utc());
+    assert_eq!(rows.last().unwrap().bucket(now(), &utc()), Bucket::Hidden, "the last section");
+    assert!(!Bucket::Hidden.expanded_by_default(), "folded away");
+
+    // Unhiding a branch needs its hidden parents too.
+    assert_eq!(sb.lineage("grand"), ["grand", "child", "root"]);
+    assert_eq!(sb.lineage("unknown"), ["unknown"]);
+
+    sb.mark_hidden(|_| false);
+    assert!(sb.rows().all(|r| !r.hidden), "unhidden");
+}
+
+#[test]
+fn an_open_session_is_never_in_hidden() {
+    let mut r = row_with(info("x", "C:\\p", 5));
+    r.hidden = true;
+    r.pane = Some(pane(1, PaneStatus::Working, "C:\\p"));
+    assert_eq!(r.bucket(now(), &utc()), Bucket::Open);
+}
+
+// --------------------------------------------------------------- dragged order
+
+#[test]
+fn custom_sort_follows_dragged_ranks_and_keeps_threads() {
+    let mut sb = threaded();
+    sb.link_threads(|id| (id == "grand").then(|| "child".to_string()), true, now());
+    // "other" dragged above the "root" thread; nothing else ranked.
+    sb.mark_order(|id| match id {
+        "other" => Some(0),
+        "root" => Some(1),
+        _ => None,
+    });
+    assert_eq!(sb.get("grand").unwrap().rank, Some(1), "a branch takes its session's rank");
+    assert_eq!(sb.root_of("grand"), "root");
+    let opts = ViewOptions { sort: SortMode::Custom, group_by_folder: false, ..ViewOptions::default() };
+    let rows = sb.view(&opts, now(), &utc());
+    let earlier: Vec<String> = rows.iter().filter(|r| r.bucket(now(), &utc()) == Bucket::Today).map(|r| r.session_id.clone()).collect();
+    assert_eq!(earlier, ["other", "root", "child", "grand"], "dragged order, threads intact");
+}

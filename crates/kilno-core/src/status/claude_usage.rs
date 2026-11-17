@@ -75,7 +75,12 @@ fn limits(file: File) -> Option<AccountLimits> {
         return None;
     }
     let updated = DateTime::<Utc>::from_timestamp_millis(usage.fetched_ms?)?;
-    let body = usage.utilization?;
+    from_body(&usage.utilization?, updated)
+}
+
+/// The usage endpoint's body (saved by Claude Code, or fetched live by [`super::live`]) as of
+/// `updated`. None when it says nothing.
+pub(crate) fn from_body(body: &Map<String, Value>, updated: DateTime<Utc>) -> Option<AccountLimits> {
     let window = |name: &str| read_limit(body.get(name).and_then(Value::as_object), "utilization").map(clamp);
     let limits = AccountLimits {
         five_hour: window("five_hour"),

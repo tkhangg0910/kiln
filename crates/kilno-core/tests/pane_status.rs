@@ -913,3 +913,50 @@ fn deadline_driven_one_shot_matches_simulation_outcomes() {
         assert_eq!(tr.status(), want);
     }
 }
+
+// --------------------------------------------------------------- Claude hooks
+
+/// Once a hook has reported, an idle Claude's redraw burst no longer fakes a turn and a Done.
+#[test]
+fn hooks_decide_working_and_done() {
+    let mut t = PaneStatusTracker::new(false, ms(0));
+    assert_eq!(t.on_hook(Hook::Working, ms(1000)), Some(PaneStatus::Working));
+    assert_eq!(t.on_hook(Hook::Done, ms(5000)), Some(PaneStatus::Done));
+
+    // A redraw burst while idle: three chunks within 900 ms, then quiet.
+    for i in 0..4 {
+        t.on_output(b"\x1b[2K redraw", ms(10_000 + i * 100));
+    }
+    assert_eq!(t.on_tick(ms(10_400)).status, None, "no Working from a burst");
+    assert_eq!(t.on_tick(ms(13_000)).status, None, "and so no second Done");
+    assert_eq!(t.status(), PaneStatus::Done);
+}
+
+#[test]
+fn hook_ask_waits_for_an_answer() {
+    let mut t = PaneStatusTracker::new(false, ms(0));
+    t.on_hook(Hook::Working, ms(0));
+    assert_eq!(t.on_hook(Hook::Ask, ms(2000)), Some(PaneStatus::NeedsInput));
+    assert_eq!(t.on_tick(ms(9000)).status, None, "a question stands while quiet");
+    assert_eq!(t.on_key(b"1", ms(10_000)), Some(PaneStatus::Working), "answered: back to work");
+}
+
+#[test]
+fn a_turn_stopped_without_a_hook_ends_after_a_long_quiet() {
+    let mut t = PaneStatusTracker::new(false, ms(0));
+    t.on_hook(Hook::Working, ms(0));
+    t.on_output(b"spinner", ms(1000));
+    assert_eq!(t.on_tick(ms(3000)).status, None, "a short quiet is not the end");
+    assert_eq!(t.next_deadline(ms(3000)), Some(ms(1000 + HOOK_QUIET_MS + 1)));
+    assert_eq!(t.on_tick(ms(1000 + HOOK_QUIET_MS + 1)).status, Some(PaneStatus::Done), "Esc: no Stop came");
+}
+
+#[test]
+fn without_hooks_the_stream_still_decides() {
+    let mut t = PaneStatusTracker::new(false, ms(0));
+    for i in 0..4 {
+        t.on_output(b"work", ms(1000 + i * 100));
+    }
+    assert_eq!(t.on_tick(ms(1400)).status, Some(PaneStatus::Working));
+    assert_eq!(t.on_tick(ms(3500)).status, Some(PaneStatus::Done));
+}

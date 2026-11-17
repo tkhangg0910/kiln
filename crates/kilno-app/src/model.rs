@@ -12,6 +12,8 @@ use kilno_core::sessions::watch::SessionSource;
 use kilno_core::sessions::SessionInfo;
 use kilno_core::sidebar::{bind_codex_panes, Sidebar, Waiting};
 use kilno_core::store::names::SessionNames;
+use kilno_core::store::hidden::HiddenSessions;
+use kilno_core::store::order::SessionOrder;
 use kilno_core::store::parents::SessionParents;
 use std::collections::HashSet;
 use std::sync::mpsc::{channel, Sender};
@@ -21,6 +23,10 @@ pub struct Model {
     pub sidebar: Sidebar,
     pub names: SessionNames,
     pub parents: SessionParents,
+    /// Sessions the user hid from the list (`hidden.json`).
+    pub hidden: HiddenSessions,
+    /// The order sessions were dragged into (`order.json`).
+    pub order: SessionOrder,
     /// Codex panes waiting for their transcript, in start order.
     pub waiting: Vec<Waiting>,
     /// Open panes, the one used last first (the screenshot picker's order).
@@ -41,6 +47,8 @@ impl Model {
             sidebar: Sidebar::new(),
             names: SessionNames::open(data),
             parents: SessionParents::open(data),
+            hidden: HiddenSessions::open(data),
+            order: SessionOrder::open(data),
             waiting: Vec::new(),
             used: Vec::new(),
             panes: Vec::new(),

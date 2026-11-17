@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use kilno_core::paths::{claude_dir, codex_home, DataDir, OsEnv};
 use kilno_core::security::ask_rules::{self, AskGroup, GROUPS};
 use kilno_core::security::own_rules::{self, OwnRule, OwnRules};
-use kilno_core::settings::{KilnoSettings, StatusTheme, RESERVE_STEPS};
+use kilno_core::settings::{KilnoSettings, StatusTheme, LIVE_USAGE_STEPS, RESERVE_STEPS};
 use kilno_core::settings_view as view;
 use kilno_core::system::login_startup::LoginStartup;
 use kilno_core::system::updater::{self, Version};
@@ -555,6 +555,38 @@ fn status_page(ui: &mut Ui, s: &mut KilnoSettings) {
         tick_row(ui, "reserve", w, &mut [("5-hour limit", &mut s.reserve_five_hour, watch), ("7-day limit", &mut s.reserve_seven_day, watch), ("Model weekly", &mut s.reserve_model_weekly, watch)]);
     });
     ui.add_space(6.0);
+    card_end(ui, card);
+
+    group_label(ui, "Live usage", 22.0);
+    let card = card_begin(ui);
+    let r = row(
+        ui,
+        Id::NULL.with("live-usage"),
+        Row::new(Lead::Icon('\u{E895}'), "Ask Anthropic for the limits", Right::Switch { on: s.live_usage, enabled: true })
+            .line(
+                "The numbers /usage shows, sooner than Claude's status line. Uses your Claude sign-in: its token is read from .credentials.json and sent to api.anthropic.com only, never saved.",
+                MUTED_AA,
+            )
+            .corners(true, !s.live_usage),
+    );
+    if r.toggled {
+        s.live_usage = !s.live_usage;
+    }
+    if s.live_usage {
+        let steps: Vec<String> = LIVE_USAGE_STEPS.iter().map(|n| format!("{n} min")).collect();
+        let chosen = LIVE_USAGE_STEPS.iter().position(|&n| n == s.live_usage_minutes).unwrap_or(1);
+        let r = row(
+            ui,
+            Id::NULL.with("live-usage-every"),
+            Row::new(Lead::Icon('\u{E916}'), "Every", Right::Segments { labels: &steps, chosen })
+                .line("While the window shows. Also after a Claude reply (at most once a minute) and when you click a limit.", MUTED_AA)
+                .sep()
+                .corners(false, true),
+        );
+        if let Some(i) = r.segment {
+            s.live_usage_minutes = LIVE_USAGE_STEPS[i];
+        }
+    }
     card_end(ui, card);
 }
 

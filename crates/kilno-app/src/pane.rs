@@ -111,6 +111,12 @@ impl PaneShared {
         }
     }
 
+    /// A Claude hook's event for this pane's session ([`kilno_core::status::hooks`]).
+    pub fn show_hook(&self, hook: kilno_core::pane_status::Hook) {
+        let s = self.tracker.lock().ok().and_then(|mut t| t.on_hook(hook, Utc::now()));
+        self.status_changed(s);
+    }
+
     /// A Codex transcript's turn: working / done are exact there.
     pub fn show_turn(&self, turn: TurnState, at: chrono::DateTime<Utc>) {
         let s = self.tracker.lock().ok().and_then(|mut t| t.on_turn(turn, at));
@@ -396,7 +402,11 @@ impl Pane {
             cwd: PathBuf::from(&plan.working_directory),
             title,
             status: if exited { PaneStatus::Exited } else { PaneStatus::Starting },
-            view: ViewState::default(),
+            view: {
+                let mut v = ViewState::default();
+                v.cwd = Some(PathBuf::from(&plan.working_directory));
+                v
+            },
             doc: None,
             doc_share: 0.5,
         }

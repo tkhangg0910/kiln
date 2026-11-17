@@ -1,4 +1,4 @@
-//! The one request Kilno makes (the update check), through WinHTTP: the system proxy (WPAD /
+//! Kilno's requests (the update check, and live usage when it is on), through WinHTTP: the system proxy (WPAD /
 //! PAC / per-user settings) and the Windows certificate store, as .NET's HttpClient had, and no
 //! TLS stack in the exe.
 
@@ -8,8 +8,8 @@ use std::time::Duration;
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::Networking::WinHttp::{
     WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryDataAvailable, WinHttpQueryHeaders,
-    WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetTimeouts, INTERNET_DEFAULT_HTTPS_PORT,
-    WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
+    WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts, INTERNET_DEFAULT_HTTPS_PORT,
+    WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_DISABLE_REDIRECTS, WINHTTP_FLAG_SECURE, WINHTTP_OPTION_DISABLE_FEATURE, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
 };
 
 /// A WinHTTP handle, closed on drop.
@@ -43,6 +43,12 @@ pub fn split_https(url: &str) -> Option<(&str, &str)> {
 /// GET an https URL: (status code, body). Each phase (resolve, connect, send, receive) times
 /// out after `timeout`. Blocks; call it off the UI thread.
 pub fn get(url: &str, user_agent: &str, timeout: Duration) -> io::Result<(u32, Vec<u8>)> {
+    get_with(url, user_agent, "", timeout)
+}
+
+/// As [`get`], with extra request headers (CRLF-separated). A request with headers does not
+/// follow redirects, so what they carry (a sign-in token) reaches the named host only.
+pub fn get_with(url: &str, user_agent: &str, headers: &str, timeout: Duration) -> io::Result<(u32, Vec<u8>)> {
     let (host, path) = split_https(url).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not https"))?;
     let ms = timeout.as_millis().min(i32::MAX as u128) as i32;
     // SAFETY: valid wide strings; null proxy names with automatic proxy.
@@ -66,8 +72,15 @@ pub fn get(url: &str, user_agent: &str, timeout: Duration) -> io::Result<(u32, V
             WINHTTP_FLAG_SECURE,
         )
     })?;
-    // SAFETY: a live request with no extra headers or body.
-    unsafe { WinHttpSendRequest(request.0, None, None, 0, 0, 0) }.map_err(io::Error::other)?;
+    let headers: Vec<u16> = headers.encode_utf16().collect();
+    if !headers.is_empty() {
+        let off = WINHTTP_DISABLE_REDIRECTS.to_ne_bytes();
+        // SAFETY: a live request; the option takes one u32, passed as its bytes.
+        unsafe { WinHttpSetOption(Some(request.0), WINHTTP_OPTION_DISABLE_FEATURE, Some(&off)) }.map_err(io::Error::other)?;
+    }
+    let headers = (!headers.is_empty()).then_some(&headers[..]);
+    // SAFETY: a live request; the headers slice (if any) outlives the call; no body.
+    unsafe { WinHttpSendRequest(request.0, headers, None, 0, 0, 0) }.map_err(io::Error::other)?;
     // SAFETY: as above; the reserved pointer must be null.
     unsafe { WinHttpReceiveResponse(request.0, std::ptr::null_mut()) }.map_err(io::Error::other)?;
 

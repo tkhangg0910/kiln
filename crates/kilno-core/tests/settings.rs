@@ -353,3 +353,21 @@ fn round_trips_a_csharp_file() {
     s.save(&path);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), csharp);
 }
+
+/// Live usage is off by default and written only when set, so a Clayo file saves back the same.
+#[test]
+fn live_usage_round_trip() {
+    let d = KilnoSettings::default();
+    assert!(!d.live_usage, "off unless turned on");
+    assert_eq!(d.live_usage_minutes, 2);
+    assert!(!d.to_json().contains("liveUsage"), "defaults are not written");
+
+    let on = KilnoSettings { live_usage: true, live_usage_minutes: 5, ..d.clone() };
+    let json = on.to_json();
+    let root: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&json).unwrap();
+    assert_eq!(KilnoSettings::from_map(&root), on, "round trip");
+
+    let odd: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(r#"{"liveUsage":true,"liveUsageMinutes":3}"#).unwrap();
+    assert_eq!(KilnoSettings::from_map(&odd).live_usage_minutes, 2, "an interval not offered falls back");
+}

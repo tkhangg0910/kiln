@@ -58,11 +58,18 @@ fn main() {
     // The status line relay runs on every status refresh of every Claude pane: it must be the
     // very first thing, before any window, font or mutex (PORTING.md §4.1).
     let mut args = std::env::args_os().skip(1);
-    if args.next().is_some_and(|a| a == relay::ARG) {
+    let first = args.next();
+    if first.as_ref().is_some_and(|a| a == relay::ARG) {
         let pass = args.next().is_some_and(|a| a == relay::PASS_ARG);
         let dir = relay::status_dir(&data_dir(&OsEnv));
         let code = relay::run(pass, std::io::stdin().lock(), std::io::stdout().lock(), &dir);
         std::process::exit(code);
+    }
+    // Claude's hooks (a turn started or ended, a question): just as early, and as quiet.
+    if first.as_ref().is_some_and(|a| a == kilno_core::status::hooks::ARG) {
+        let event = args.next().map(|a| a.to_string_lossy().into_owned()).unwrap_or_default();
+        let dir = kilno_core::status::hooks::turns_dir(&data_dir(&OsEnv));
+        std::process::exit(kilno_core::status::hooks::run(&event, std::io::stdin().lock(), &dir));
     }
 
     mark("main");

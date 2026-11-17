@@ -307,8 +307,10 @@ fn sidebar_footer() {
     // Past its reset time the number belongs to the old window until Claude reports again.
     let stale = footer(Some(&l), &all(), now() + Duration::hours(2));
     assert!(stale[0].stale, "a limit past its reset is stale");
+    assert_eq!(stale[0].percent, 0, "past its reset the window starts empty");
     assert_eq!(
-        stale[0].tip, "5-hour limit: reset since the last report, which said 62%",
+        stale[0].tip,
+        "5-hour limit: reset since the last report (which said 62%); a new window starts at 0%",
         "a stale limit says so"
     );
     assert_eq!(stale[0].detail, None, "a stale limit has no countdown");
@@ -371,8 +373,8 @@ fn reserve() {
     );
     assert_eq!(
         footer(Some(&near), &at80, n + Duration::hours(2))[0].band(),
-        Band::Orange,
-        "a stale limit is not past the reserve"
+        Band::Green,
+        "a stale limit is not past the reserve: its new window is empty"
     );
 
     let mut watch = ReserveWatch::new();
