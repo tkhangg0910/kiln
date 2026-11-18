@@ -1,4 +1,0 @@
-// The exe's icon (resource 1: Explorer, the taskbar, and win::shell::set_window_icon) and its
-// manifest (PerMonitorV2, long paths, Windows 10+), as src/Kilno's app.manifest and kilno.ico.
-1 ICON "kilno.ico"
-1 24 "kilno.manifest"
