@@ -104,7 +104,8 @@ pub fn latest_url() -> String {
 /// The script as it was released with that version, not as main has it now: a push to main
 /// never reaches anyone's Update button.
 pub fn script_url(version: Version) -> String {
-    format!("https://raw.githubusercontent.com/{REPO}/v{version}/scripts/install.ps1")
+    let script = if cfg!(windows) { "install.ps1" } else { "install.sh" };
+    format!("https://raw.githubusercontent.com/{REPO}/v{version}/scripts/{script}")
 }
 
 /// The release's page on GitHub: its notes are what's new in that version.
@@ -130,9 +131,21 @@ pub fn newer_from_json(body: &str, current: Version) -> Option<Version> {
     newer(tag_from_json(body).as_deref(), current)
 }
 
+/// Off Windows: the install script run by `sh` (it waits for Kilno to quit, swaps the folder and
+/// starts the new one); the caller then quits.
+#[cfg(not(windows))]
+pub fn install_command(version: Version, kilno_dir: &Path) -> Command {
+    let mut c = Command::new("sh");
+    c.args(["-c", &format!("curl -fsSL '{}' | sh", script_url(version))]);
+    c.env("KILNO_DIR", kilno_dir);
+    c.current_dir(std::env::temp_dir());
+    c
+}
+
 /// The install script in a PowerShell window you can watch; the caller then quits. On a failure
 /// the window waits, or it would close before the error could be read. `KILNO_DIR` makes it
 /// update this Kilno where it is, not a copy in the default folder.
+#[cfg(windows)]
 pub fn install_command(version: Version, kilno_dir: &Path) -> Command {
     let mut c = Command::new("powershell.exe");
     c.args([

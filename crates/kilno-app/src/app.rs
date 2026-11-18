@@ -108,6 +108,8 @@ fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOp
     #[cfg_attr(not(windows), allow(unused_mut))] // moved onto the work area on Windows only
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("K I L N O")
+        // Linux desktops match the window to kilno.desktop (StartupWMClass) by this.
+        .with_app_id("kilno")
         .with_inner_size([1280.0, 820.0])
         .with_min_inner_size([760.0, 420.0])
         // The exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.

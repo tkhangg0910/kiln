@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Kilno
+GenericName=Agent terminal
+Comment=Claude Code, Codex and OpenCode sessions in one window
+Exec=kilno %F
+Icon=kilno
+Terminal=false
+Categories=Development;TerminalEmulator;
+StartupWMClass=kilno
