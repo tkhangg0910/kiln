@@ -5,14 +5,14 @@
 <h1 align="center">Kilno</h1>
 
 <p align="center"><b>Never miss an agent waiting on you.</b><br>
-Every Claude Code, Codex and OpenCode session in one Windows window, plus the <i>island</i>: a small bar at
+Every Claude Code, Codex and OpenCode session in one window on Windows (Linux in preview), plus the <i>island</i>: a small bar at
 the top of the screen that tells you when a session asks for a permission or a decision, or is done.</p>
 
 <p align="center">
   <a href="https://github.com/tkhangg0910/kilno/releases/latest"><img src="https://img.shields.io/github/v/release/tkhangg0910/kilno" alt="Latest release"></a>
   <a href="https://github.com/tkhangg0910/kilno/actions/workflows/ci.yml"><img src="https://github.com/tkhangg0910/kilno/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/tkhangg0910/kilno" alt="MIT licence"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4" alt="Windows 10 and 11">
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20%7C%20Linux%20(preview)-0078D4" alt="Windows 10 and 11, Linux in preview">
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@ the top of the screen that tells you when a session asks for a permission or a d
 | <img src="docs/assets/picker.png" width="420" alt="The island offering a new screenshot to a session"> | **Screenshots straight to the prompt.** Take a screenshot with Ctrl+Alt+S or any tool, and the island hands it to the session you pick. |
 
 Kilno is one small native `kilno.exe`. It reads your agents' local session files and sends nothing
-out; its only network call is the update check. It is an early release (v0.2.2), forked from
+out; its only network call is the update check. It is an early release (v0.2.3), forked from
 the Rust port of [Clayo](https://github.com/YogiOnCode/Clayo) (see [Credits](#credits)).
 
 ## Lighter than Clayo
