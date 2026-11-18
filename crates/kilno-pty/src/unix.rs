@@ -25,13 +25,23 @@ pub fn argv(line: &str) -> Vec<String> {
     let mut word = String::new();
     let mut in_word = false;
     let mut quoted = false;
+    let mut escaped = false;
     for c in line.chars() {
+        if escaped {
+            // `\x` outside quotes is a literal x (as in `'it'\''s'`).
+            word.push(c);
+            escaped = false;
+            continue;
+        }
         match c {
             '\'' => {
                 quoted = !quoted;
                 in_word = true;
             }
-            '\\' if !quoted => in_word = true,
+            '\\' if !quoted => {
+                escaped = true;
+                in_word = true;
+            }
             c if c.is_whitespace() && !quoted => {
                 if in_word {
                     out.push(std::mem::take(&mut word));

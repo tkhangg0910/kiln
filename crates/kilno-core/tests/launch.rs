@@ -3,6 +3,7 @@
 
 use kilno_core::agent::claude::ClaudeAgent;
 use kilno_core::agent::codex::CodexAgent;
+#[cfg(windows)]
 use kilno_core::agent::helper::quote;
 use kilno_core::agent::AgentKind;
 use kilno_core::launch::{self, plan, Agent, LaunchMode, MissingSessionId};
@@ -10,9 +11,17 @@ use kilno_core::paths::MapEnv;
 use std::cell::RefCell;
 use std::path::Path;
 
+// The agent as the pane's shell runs it: PowerShell needs `&` and doubles a quote; a POSIX
+// shell runs the quoted word and closes, escapes and reopens around one.
+#[cfg(windows)]
 const EXE: &str = r"& 'C:\Users\O''Neil\.local\bin\claude.exe'";
+#[cfg(not(windows))]
+const EXE: &str = r"'C:\Users\O'\''Neil\.local\bin\claude.exe'";
 const RELAY: &str = r" --settings 'C:\s\relay.json'";
+#[cfg(windows)]
 const CX: &str = r"& 'C:\Users\O''Neil\AppData\Roaming\npm\codex.cmd'";
+#[cfg(not(windows))]
+const CX: &str = r"'C:\Users\O'\''Neil\AppData\Roaming\npm\codex.cmd'";
 
 fn claude() -> ClaudeAgent {
     ClaudeAgent::new(r"C:\Users\O'Neil\.local\bin\claude.exe", Some(Path::new(r"C:\s\relay.json")))
@@ -43,7 +52,11 @@ fn claude_new() {
     assert_eq!(p.working_directory, r"C:\work", "new: in the folder");
     assert_ne!(go(&claude(), LaunchMode::New, None).expected_session_id, id, "new: a fresh id each time");
     assert_eq!(p.agent, AgentKind::Claude, "claude: says whose pane");
-    assert_eq!(p.shell_command_line, "powershell.exe -NoLogo");
+    if cfg!(windows) {
+        assert_eq!(p.shell_command_line, "powershell.exe -NoLogo");
+    } else {
+        assert!(p.shell_command_line.ends_with("' -l"), "a login shell: {}", p.shell_command_line);
+    }
 }
 
 #[test]
@@ -62,6 +75,18 @@ fn claude_resume_and_fork() {
     );
 }
 
+#[cfg(not(windows))]
+#[test]
+fn quoting_for_a_posix_shell() {
+    assert_eq!(go(&bare(), LaunchMode::Resume, Some("abc")).agent_command, "'claude' --resume 'abc'", "no relay settings: no --settings");
+    assert_eq!(
+        go(&bare(), LaunchMode::Resume, Some("x'; calc; '")).agent_command,
+        r"'claude' --resume 'x'\''; calc; '\'''",
+        "an id is quoted, so a crafted transcript types no command"
+    );
+}
+
+#[cfg(windows)]
 #[test]
 fn quoting() {
     assert_eq!(go(&bare(), LaunchMode::Resume, Some("abc")).agent_command, "& 'claude' --resume 'abc'", "no relay settings: no --settings");
@@ -129,6 +154,7 @@ fn fork_without_a_parent_is_refused() {
     assert!(plan(&claude(), LaunchMode::Resume, r"C:\work", Some("  "), &MapEnv::default()).is_err());
 }
 
+#[cfg(windows)]
 #[test]
 fn pwsh_on_path_wins() {
     let dir = tempfile::tempdir().unwrap();

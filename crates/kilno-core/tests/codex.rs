@@ -232,6 +232,8 @@ fn rows() {
 }
 
 /// Binding a pane Kilno started to the transcript Codex then writes.
+// Folders match case-insensitively, a trailing backslash ignored: Windows only.
+#[cfg(windows)]
 #[test]
 fn find_started_binds_panes() {
     let h = Home::new();

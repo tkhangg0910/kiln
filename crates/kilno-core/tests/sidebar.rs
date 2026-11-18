@@ -824,6 +824,7 @@ fn bind_window_capped_at_ten_minutes() {
     assert_eq!(codex_bind_window(&panes, 0), (t(0), t(10)));
 }
 
+#[cfg(windows)]
 #[test]
 fn bind_window_ends_at_next_new_pane_in_same_folder() {
     let panes = [

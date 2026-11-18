@@ -26,10 +26,11 @@ impl Machine {
         let p = |parts: &[&str]| m.p(parts).to_string_lossy().into_owned();
         let env = MapEnv::default()
             .with("USERPROFILE", p(&["home"]))
+            .with("HOME", p(&["home"]))
             .with("APPDATA", p(&["home", "AppData", "Roaming"]))
             .with("LOCALAPPDATA", p(&["home", "AppData", "Local"]))
             .with("ProgramFiles", p(&["pf"]))
-            .with("PATH", format!("{};{}", p(&["bin1"]), p(&["bin2"])));
+            .with("PATH", format!("{}{}{}", p(&["bin1"]), if cfg!(windows) { ';' } else { ':' }, p(&["bin2"])));
         m.env = env;
         m
     }
@@ -74,6 +75,29 @@ impl Machine {
     }
 }
 
+#[cfg(not(windows))]
+#[test]
+fn found_in_order_on_unix() {
+    let mut m = Machine::fresh();
+    let none = m.detect(AgentKind::Claude, None);
+    assert_eq!(none.exe, None);
+    assert_eq!(none.data_folder, m.s(&["home", ".claude"]), "default data folder is ~/.claude");
+    // ~/.local/bin without PATH, then PATH (colon-separated) beats it, then a saved path wins.
+    let native = m.touch(&["home", ".local", "bin", "claude"], "");
+    m.works(&native, "2.1.288 (Claude Code)", Some(("auth status", CLAUDE_IN)));
+    assert_eq!(m.detect(AgentKind::Claude, None).exe.as_deref(), Some(native.as_str()));
+    let on_path = m.touch(&["bin2", "claude"], "");
+    m.works(&on_path, "2.1.288 (Claude Code)", Some(("auth status", CLAUDE_OUT)));
+    assert_eq!(m.detect(AgentKind::Claude, None).exe.as_deref(), Some(on_path.as_str()));
+    let saved = m.touch(&["custom", "claude"], "");
+    m.works(&saved, "2.1.200 (Claude Code)", None);
+    assert_eq!(m.detect(AgentKind::Claude, Some(&saved)).exe.as_deref(), Some(saved.as_str()));
+    // npm's global bin for Codex.
+    let codex = m.touch(&["home", ".npm-global", "bin", "codex"], "");
+    assert_eq!(kilno_core::agent::detect::locate(&m.env, AgentKind::Codex, None).as_deref(), Some(codex.as_str()));
+}
+
+#[cfg(windows)]
 #[test]
 fn nothing_installed() {
     let m = Machine::fresh();
@@ -84,6 +108,7 @@ fn nothing_installed() {
     assert_eq!(none.data_folder, m.s(&["home", ".claude"]), "default data folder is ~\\.claude");
 }
 
+#[cfg(windows)]
 #[test]
 fn claude_found_in_order() {
     let mut m = Machine::fresh();
@@ -127,6 +152,7 @@ fn meta(cwd: &str) -> String {
     )
 }
 
+#[cfg(windows)]
 #[test]
 fn codex_through_npm() {
     let mut m = Machine::fresh();
@@ -274,6 +300,7 @@ fn a_visible_powershell_window_that_waits() {
     assert_eq!(args, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "x; Read-Host 'Done. Press Enter to close'"]);
 }
 
+#[cfg(windows)]
 #[test]
 fn locate_is_cheap_and_needs_no_runner() {
     let m = Machine::fresh();
