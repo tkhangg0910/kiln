@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Windows 10 or 11, 64-bit.
+- Windows 10 or 11, 64-bit; or Linux x86_64 (preview, see [linux.md](linux.md)).
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex) and/or [OpenCode](https://opencode.ai) (see [AGENTS.md](AGENTS.md); Kilno's setup window can install or locate them).
 - `git` on PATH (used at run time for the branch/diff in the pane header).
 - To build from source: Rust stable 1.85+ with the MSVC toolchain and the Visual Studio C++ build tools.

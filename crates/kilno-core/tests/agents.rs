@@ -241,6 +241,7 @@ fn info(kind: AgentKind, exe: Option<&str>, npm: Option<&str>) -> AgentInfo {
     }
 }
 
+#[cfg(windows)]
 #[test]
 fn install_and_sign_in_commands() {
     let claude_missing = info(AgentKind::Claude, None, None);
@@ -264,6 +265,7 @@ fn install_and_sign_in_commands() {
     assert_eq!(sign_in_command(&claude_missing), None, "nothing to sign in to");
 }
 
+#[cfg(windows)]
 #[test]
 fn a_visible_powershell_window_that_waits() {
     let w = window("x");
@@ -278,4 +280,21 @@ fn locate_is_cheap_and_needs_no_runner() {
     let exe = m.touch(&["bin1", "codex.cmd"], "");
     assert_eq!(kilno_core::agent::detect::locate(&m.env, AgentKind::Codex, None).as_deref(), Some(exe.as_str()));
     assert!(Path::new(&exe).is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn install_and_sign_in_commands_for_sh() {
+    assert_eq!(
+        install_command(&info(AgentKind::Claude, None, None)).as_deref(),
+        Some("curl -fsSL https://claude.ai/install.sh | bash")
+    );
+    assert_eq!(
+        install_command(&info(AgentKind::OpenCode, None, Some("/usr/bin/npm"))).as_deref(),
+        Some("'/usr/bin/npm' install -g opencode-ai")
+    );
+    assert_eq!(sign_in_command(&info(AgentKind::Codex, Some("/home/me/.local/bin/codex"), None)).as_deref(), Some("'/home/me/.local/bin/codex' login"));
+    let w = window("echo hi");
+    let args: Vec<_> = w.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+    assert!(args.last().unwrap().starts_with("echo hi; printf"), "the command, then a wait for Enter: {args:?}");
 }

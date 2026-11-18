@@ -104,6 +104,13 @@ fn start_visible(start: &Startup, setup_first: bool) -> bool {
     !start.background && !setup_first
 }
 
+fn window_icon() -> egui::IconData {
+    if cfg!(windows) {
+        return egui::IconData::default();
+    }
+    eframe::icon_data::from_png_bytes(include_bytes!("../../../docs/assets/logo.png")).unwrap_or_default()
+}
+
 fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOptions {
     #[cfg_attr(not(windows), allow(unused_mut))] // moved onto the work area on Windows only
     let mut viewport = egui::ViewportBuilder::default()
@@ -112,8 +119,9 @@ fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOp
         .with_app_id("kilno")
         .with_inner_size([1280.0, 820.0])
         .with_min_inner_size([760.0, 420.0])
-        // The exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.
-        .with_icon(Arc::new(egui::IconData::default()))
+        // Windows: the exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.
+        // Elsewhere the window carries the logo itself.
+        .with_icon(Arc::new(window_icon()))
         .with_visible(visible);
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut centered = true;

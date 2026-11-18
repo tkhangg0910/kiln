@@ -92,6 +92,8 @@ pub fn note_kind_for(previous: PaneStatus, now: PaneStatus) -> Option<NoteKind> 
     }
 }
 
+// Off Windows only Notify and Settings' reply are acted on (desktop notifications).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) enum Cmd {
     Notify(IslandNote),
     Resolve(NoteSource),
