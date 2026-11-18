@@ -1,14 +1,16 @@
-//! The two agents Kilno runs, and how to find and start them.
+//! The agents Kilno runs (Claude Code, Codex, OpenCode), and how to find and start them.
 
 pub mod claude;
 pub mod codex;
 pub mod detect;
 pub mod helper;
+pub mod opencode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum AgentKind {
     Claude,
     Codex,
+    OpenCode,
 }
 
 /// What setup found for one agent. `exe` is None when nothing was found or what was found does
@@ -30,6 +32,7 @@ impl AgentKind {
         match self {
             AgentKind::Claude => "Claude Code",
             AgentKind::Codex => "Codex",
+            AgentKind::OpenCode => "OpenCode",
         }
     }
 
@@ -38,6 +41,7 @@ impl AgentKind {
         match self {
             AgentKind::Claude => "CC",
             AgentKind::Codex => "CX",
+            AgentKind::OpenCode => "OC",
         }
     }
 }

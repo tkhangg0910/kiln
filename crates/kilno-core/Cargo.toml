@@ -12,6 +12,7 @@ chrono.workspace = true
 uuid.workspace = true
 notify.workspace = true
 pulldown-cmark = { version = "0.13", default-features = false }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg.workspace = true

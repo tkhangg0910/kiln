@@ -78,7 +78,8 @@ pub fn header(
             .filter(|_| settings.status_model)
             .map(model_name),
         git: git.filter(|_| settings.status_branch).cloned(),
-        context: settings.status_context.then(|| context_meter(status)),
+        // A window of unknown size (OpenCode does not store it) shows no meter.
+        context: (settings.status_context && status.context_size > 0).then(|| context_meter(status)),
         // Codex leaves effort out when it runs on its default, and then so does the strip.
         effort: Some(status.effort.clone()).filter(|e| settings.status_effort && !e.is_empty()),
         five_hour: limit(

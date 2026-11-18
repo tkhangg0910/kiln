@@ -7,11 +7,12 @@ use std::process::Command;
 
 pub use crate::text::ps_quote as quote;
 
-/// None when it can't be installed from here: Codex without npm.
+/// None when it can't be installed from here: Codex or OpenCode without npm.
 pub fn install_command(agent: &AgentInfo) -> Option<String> {
     match agent.kind {
         AgentKind::Claude => Some("irm https://claude.ai/install.ps1 | iex".to_string()),
         AgentKind::Codex => agent.npm.as_deref().map(|npm| format!("& {} install -g @openai/codex", quote(npm))),
+        AgentKind::OpenCode => agent.npm.as_deref().map(|npm| format!("& {} install -g opencode-ai", quote(npm))),
     }
 }
 
@@ -21,6 +22,7 @@ pub fn sign_in_command(agent: &AgentInfo) -> Option<String> {
     Some(match agent.kind {
         AgentKind::Claude => format!("& {exe} auth login"),
         AgentKind::Codex => format!("& {exe} login"),
+        AgentKind::OpenCode => format!("& {exe} auth login"),
     })
 }
 

@@ -1,14 +1,14 @@
 # FAQ
 
 **Do I need an account for Kilno?**
-No. Kilno runs the Claude Code and Codex CLIs you already have and uses their sign-in.
+No. Kilno runs the Claude Code, Codex and OpenCode CLIs you already have and uses their sign-in.
 
 **Does Kilno send my code or prompts anywhere?**
 No. Its only network calls are the GitHub releases check of `tkhangg0910/kilno` (Settings ›
 General) and, if you turn on live usage (Settings › Status bar, off by default), Anthropic's usage
 endpoint, asked with your Claude sign-in for the limits `/usage` shows.
 
-**Does it change my Claude Code or Codex settings?**
+**Does it change my Claude Code, Codex or OpenCode settings?**
 No. It reads `%USERPROFILE%\.claude` and `%USERPROFILE%\.codex` (or `CLAUDE_CONFIG_DIR` /
 `CODEX_HOME`) and never writes there. Its own files live in `%LOCALAPPDATA%\Kilno`.
 
@@ -46,7 +46,7 @@ can own the Ctrl+Alt+S shortcut. To carry your Clayo settings over, copy `settin
 `names.json` and `parents.json` from `%LOCALAPPDATA%\Clayo` to `%LOCALAPPDATA%\Kilno`.
 
 **Which agent features work where?**
-See [AGENTS.md](AGENTS.md) for what works with Claude Code and with Codex.
+See [AGENTS.md](AGENTS.md) for what works with Claude Code, Codex and OpenCode.
 
 **macOS or Linux?**
 No. Kilno is built on ConPTY and Win32 and runs on Windows 10 and 11 (64-bit) only.

@@ -999,7 +999,11 @@ fn agent_chip(ui: &Ui, right_center: Pos2, text: &str, opacity: f32, tip: Option
     p.rect_filled(r, 4, CHIP_BG.gamma_multiply(opacity));
     p.rect_stroke(r, 4, Stroke::new(1.0, MENU_RIM.gamma_multiply(opacity)), StrokeKind::Inside);
     let kind = crate::agent_logo::kind_of(text);
-    let tint = if kind == kilno_core::agent::AgentKind::Codex { TEXT_PRIMARY } else { Color32::from_rgb(0xE3, 0x9A, 0x7E) };
+    let tint = match kind {
+        kilno_core::agent::AgentKind::Codex => TEXT_PRIMARY,
+        kilno_core::agent::AgentKind::OpenCode => Color32::from_rgb(0xA6, 0xD9, 0xB5),
+        kilno_core::agent::AgentKind::Claude => Color32::from_rgb(0xE3, 0x9A, 0x7E),
+    };
     crate::agent_logo::paint(p, Rect::from_center_size(r.center(), Vec2::splat(12.0)), kind, tint.gamma_multiply(opacity));
     if let Some(tip) = tip {
         ui.interact(r, Id::NULL.with(("agent-chip", text, r.min.x as i32, r.min.y as i32)), Sense::hover()).on_hover_text(tip);

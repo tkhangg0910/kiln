@@ -60,6 +60,30 @@ impl Watcher {
     }
 }
 
+impl Watcher {
+    /// Watches only `dir` itself (not below it) and reports, [`DEBOUNCE`] after the last event,
+    /// whenever a file `wanted` accepts changes. For a store kept in one file, such as
+    /// OpenCode's database and its `-wal`.
+    pub fn start_files(dir: &Path, wanted: fn(&Path) -> bool, on_change: OnChange) -> notify::Result<Self> {
+        let (bump, bumps) = mpsc::channel::<()>();
+        let mut inner = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            let hit = match res {
+                Ok(e) => e.need_rescan() || e.paths.iter().any(|p| wanted(p)),
+                Err(_) => true,
+            };
+            if hit {
+                let _ = bump.send(());
+            }
+        })?;
+        inner.watch(dir, RecursiveMode::NonRecursive)?;
+        std::thread::Builder::new()
+            .name("kilno-store-watch".into())
+            .spawn(move || debounce(bumps, on_change))
+            .map_err(notify::Error::io)?;
+        Ok(Self { _inner: inner })
+    }
+}
+
 /// Re-arms on every bump; fires once the bumps stop for [`DEBOUNCE`]. Ends when the watcher
 /// (the sender) is dropped.
 fn debounce(bumps: mpsc::Receiver<()>, on_change: OnChange) {
