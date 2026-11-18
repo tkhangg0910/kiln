@@ -9,15 +9,19 @@ phần Windows ra sau một lớp `platform` để Linux có bản cài đặt c
 
 ---
 
-## 1. Hiện trạng (đo trên `main` @ 0.2.0)
+## 1. Hiện trạng (đo trên `main` @ 0.2.2)
 
 | Crate | Dòng | Phụ thuộc Windows | Ghi chú |
 |---|---|---|---|
-| `kilno-term` | ~1.500 | không | `alacritty_terminal` + egui, chạy được ngay |
-| `kilno-core` | ~8.300 | `winreg` (đã gate `cfg(windows)`) | Logic thuần. Còn giả định Windows về đường dẫn, `PATH`, shell |
+| `kilno-term` | ~1.700 | không | `alacritty_terminal` + egui, chạy được ngay. `paths.rs` (Ctrl+click đường dẫn) chặn đường dẫn mạng theo prefix Windows: xem LNX-032 |
+| `kilno-core` | ~9.050 | `winreg` (đã gate, 7 chỗ `cfg(windows)`) | Logic thuần. Còn giả định Windows về đường dẫn, `PATH`, shell |
 | `kilno-pty` | ~340 | ConPTY (`sys.rs`, 283 dòng) | Trên non-Windows `spawn` trả `Unsupported` |
-| `kilno-island` | ~4.200 | Win32 layered window (`sys/win.rs`, 658 dòng) | Phần vẽ (`tiny-skia`, anim, mascot) dùng lại được |
-| `kilno-app` | ~7.900 | `windows`, `rfd` (đã gate) | `win/` (instance, tray, http, shell) + ~35 chỗ `#[cfg(windows)]` |
+| `kilno-island` | ~4.400 | Win32 layered window (`sys/win.rs`, 658 dòng) | Phần vẽ (`tiny-skia`, anim, mascot, glow vẽ từng pixel từ 0.2.1) dùng lại được |
+| `kilno-app` | ~8.300 | `windows`, `rfd` (đã gate) | `win/` (instance, tray, http có header và tắt redirect, shell có `reveal`) + 36 chỗ `#[cfg(windows)]` |
+
+Từ 0.2.1–0.2.2 có thêm, phần lớn dùng lại được nguyên:
+- Thuần `kilno-core`, chạy được trên Linux: ẩn session (`hidden.json`), thứ tự kéo thả (`order.json`), quota gộp theo từng giới hạn, trạng thái pane theo hook (`PaneStatusTracker::on_hook`), quyết định sửa đường dẫn login (`needs_repair`).
+- Cần phần riêng cho Linux: live usage (HTTP có token), hooks và status line (quoting), Ctrl+click đường dẫn (chặn đường dẫn mạng, mở file manager), start at login (opt-in), updater (rời thư mục cài trước khi thay).
 
 Đã thuận lợi:
 - Dependency Windows đều nằm dưới `[target.'cfg(windows)'.dependencies]`.
@@ -81,10 +85,14 @@ Quy tắc:
 | Một instance | Named mutex + named pipe | `flock` trên `$XDG_RUNTIME_DIR/kilno.lock` + Unix socket cùng chỗ |
 | Đưa cửa sổ lên trước | `AllowSetForegroundWindow` | Gửi lệnh qua socket rồi `ViewportCommand::Focus`. Wayland có thể chỉ nhấp nháy taskbar |
 | Icon khay | `Shell_NotifyIconW` | `ksni` (StatusNotifierItem qua D-Bus). GNOME cần extension AppIndicator; không có thì bỏ qua êm |
-| HTTP (updater) | WinHTTP | `ureq` + `rustls` (không phụ thuộc OpenSSL) |
+| HTTP (updater, live usage) | WinHTTP; request có header thì tắt redirect | `ureq` + `rustls` (không phụ thuộc OpenSSL); request có header cũng **tắt redirect** (`max_redirects(0)`) để token chỉ tới đúng host |
+| Token cho live usage | `%USERPROFILE%\.claude\.credentials.json` | `~/.claude/.credentials.json` (hoặc `$CLAUDE_CONFIG_DIR`); Claude Code trên Linux lưu ở file, khác macOS dùng Keychain |
 | Mở file/thư mục/link | `ShellExecuteW` | `xdg-open` (spawn, không chờ) |
+| Ctrl+click đường dẫn trong terminal | Chỉ prefix `Disk`/`VerbatimDisk`; file thì `explorer /select` | Đường dẫn tuyệt đối, trừ các chỗ có thể chạm mạng (LNX-032); file thì D-Bus `org.freedesktop.FileManager1.ShowItems`, không có thì `xdg-open` thư mục chứa nó |
 | Hộp chọn thư mục | `rfd` Win32 | `rfd` feature `xdg-portal` (không kéo GTK) |
-| Tự chạy khi đăng nhập | `HKCU\...\Run` | `~/.config/autostart/kilno.desktop` với `Exec=... --background` |
+| Tự chạy khi đăng nhập | `HKCU\...\Run`, chỉ khi user bật (từ 0.2.1) | `~/.config/autostart/kilno.desktop` với `Exec=... --background`, cũng chỉ khi user bật; lúc khởi động chỉ sửa dòng `Exec=` khi exe cũ không còn |
+| Hooks + status line trong `--settings` | `'C:/…/kilno.exe' --hook done` (Git Bash) | `'/…/kilno' --hook done` (`sh`): cùng kiểu quote, thư mục `turns/` và `status/` trong data dir |
+| Thông tin phiên bản của exe | VERSIONINFO do `build.rs` tạo | Không có trên ELF; tên và version nằm trong `.desktop` và AppStream metainfo (LNX-031) |
 | User PATH | Registry `Environment\Path` | Không sửa shell rc. Cài vào `~/.local/bin`, báo user nếu thư mục đó chưa có trong PATH |
 | Tìm agent | `claude.exe`/`.cmd`, `npm.cmd` | `claude`, `codex`, `npm` trên PATH (tách `:`), `~/.local/bin`, `~/.npm-global/bin`, `$(npm prefix -g)/bin` |
 | Ẩn cửa sổ console con | `CREATE_NO_WINDOW` | Không cần |
@@ -123,14 +131,16 @@ Quy tắc:
 - [ ] **LNX-021** Đóng pane: `\x03` hai lần cách 600 ms (giữ nguyên), rồi `SIGHUP` → `SIGKILL` sau `QUIT_GRACE`.
 - [ ] **LNX-022** Đặt `TERM=xterm-256color`, `COLORTERM=truecolor` cho pane; xoá `INHERITED_*` như Windows.
 - [ ] **LNX-023** Một instance: lock + socket. Lần chạy thứ hai gửi thư mục rồi thoát; lần đầu mở pane đúng thư mục đó.
-- [ ] **LNX-024** Updater: `ureq`; asset `linux-x64.tar.gz`; kiểm sha256; thay file bằng `rename`; khởi động lại.
+- [ ] **LNX-024** Updater: `ureq`; asset `linux-x64.tar.gz`; kiểm sha256; thay file bằng `rename`; khởi động lại. Script cập nhật chạy trong thư mục tạm, không đứng trong thư mục cài (bài học lỗi "in use" của 0.2.1).
+- [ ] **LNX-024b** Live usage: `os::http::get_with(url, headers)` bằng `ureq` với `max_redirects(0)`; token đọc từ `live::credentials_path` (đã đúng cho Linux nếu `paths` dùng `HOME`). Test: một redirect 302 không làm request thứ hai mang header `Authorization`.
 - [ ] **LNX-025** `xdg-open` cho file, thư mục, link, HTML page (pages giữ CSP như cũ).
 - [ ] **LNX-026** Hộp chọn thư mục và binary agent qua `rfd` portal; không có portal thì ô nhập tay.
 - [ ] **LNX-027** Setup window tìm `claude`/`codex` theo §4. Nút cài đặt chạy `npm i -g …` hoặc script cài chính thức của Claude Code. Không dùng `sudo`.
-- [ ] **LNX-028** Status line: ghi lệnh `'<đường dẫn kilno>' --statusline [--pass]` với quoting `sh`. Đọc lại đúng settings Claude đã có. Test round-trip.
-- [ ] **LNX-029** Tự chạy khi đăng nhập qua file `.desktop` autostart; file đánh dấu `no-login-start` giữ nguyên ý nghĩa.
+- [ ] **LNX-028** Status line và hooks: ghi `'<đường dẫn kilno>' --statusline [--pass]` và `'<đường dẫn kilno>' --hook working|done|ask` với quoting `sh`. Đọc lại đúng settings Claude đã có. Test round-trip; chạy thử một `claude -p` thật trên Linux để thấy `turns/<session>.txt` được ghi.
+- [ ] **LNX-029** Tự chạy khi đăng nhập qua file `.desktop` autostart, **chỉ khi user bật** (setup hoặc Settings), như Windows từ 0.2.1. Lúc khởi động chỉ sửa `Exec=` khi exe nó trỏ tới không còn (`needs_repair`, đọc dòng `Exec=` thay cho giá trị registry). File đánh dấu `no-login-start` giữ nguyên ý nghĩa.
 - [ ] **LNX-030** Font: bundle sẵn font như Windows. Nếu có dùng font hệ thống thì fallback `fontconfig` (DejaVu/Noto) để không bị ô vuông.
-- [ ] **LNX-031** Icon ứng dụng + `kilno.desktop` (Name, Exec, Icon, `StartupWMClass` khớp app id của eframe).
+- [ ] **LNX-031** Icon ứng dụng + `kilno.desktop` (Name, Exec, Icon, `StartupWMClass` khớp app id của eframe) + AppStream metainfo (tên, version, license, link repo): chỗ Linux đặt thông tin mà Windows để trong VERSIONINFO.
+- [ ] **LNX-032** Ctrl+click đường dẫn (`kilno-term::paths`): trên Linux `on_local_drive` hiện nhận mọi đường dẫn tuyệt đối. Chặn thêm những chỗ có thể chạm mạng khi chỉ cần kiểm tra file có tồn tại: `/net/…` và `/smb/…` (autofs có thể tự kết nối tới host do terminal in ra), và mọi đường dẫn nằm dưới một mount mạng (`nfs`, `cifs`, `smbfs`, `sshfs`, `fuse.*`, đọc từ `/proc/self/mountinfo`). Mở file: D-Bus `FileManager1.ShowItems`, không có thì `xdg-open` thư mục chứa nó. Có test cho từng dạng, như test UNC bên Windows.
 
 ### 5.3 Island (4–6 ngày)
 
@@ -154,7 +164,7 @@ Island trên Linux là phần rủi ro nhất. Code vẽ (`view`, `glow`, `masco
 
 - [ ] **LNX-060** `release.yml` thêm job Linux, build trên `ubuntu-22.04` để glibc đủ cũ (chạy được trên distro mới hơn).
 - [ ] **LNX-061** Asset: `kilno-x.y.z-linux-x64.tar.gz` + `.sha256`; AppImage nếu kịp.
-- [ ] **LNX-062** `scripts/install.sh` (kiểm sha256, không sudo, không sửa shell rc).
+- [ ] **LNX-062** `scripts/install.sh` (kiểm sha256, không sudo, không sửa shell rc, `cd` ra thư mục tạm trước khi thay thư mục cài, không tự bật autostart).
 - [ ] **LNX-063** Updater chọn asset theo OS; bản Windows cũ (0.2.x) bỏ qua asset Linux. Có test với JSON release mẫu chứa cả hai asset.
 - [ ] **LNX-064** Docs: `installation.md`, `troubleshooting.md` (Wayland, GNOME tray, portal), `faq.md` ("macOS or Linux?"), `architecture.md` (§Process model, Rendering), README.
 
@@ -176,6 +186,11 @@ Checklist chạy tay trước khi phát hành:
 4. Đóng cửa sổ → icon khay (hoặc island) đưa lại được; Quit dọn sạch.
 5. Mở `kilno /some/dir` lần hai → instance đầu mở đúng thư mục.
 6. Updater thấy bản mới hơn, tải, kiểm checksum, khởi động lại.
+7. Gửi một prompt, để Claude rảnh vài phút: island chỉ báo "done" một lần (hooks), không có "done" giả.
+8. Bật live usage: số khớp `/usage`; tắt đi thì Kilno quay về số của status line.
+9. Hide, Unhide, kéo thả session; khởi động lại vẫn giữ thứ tự và danh sách ẩn.
+10. Ctrl+click một file và một thư mục trong terminal mở đúng file manager; một đường dẫn `/net/<host>/x` không làm gì (không có kết nối mạng).
+11. Start at login tắt sẵn trên máy sạch; bật lên thì có `~/.config/autostart/kilno.desktop`, tắt đi thì file biến mất.
 
 ## 7. Rủi ro và tạm hoãn dự kiến
 
@@ -188,16 +203,18 @@ Checklist chạy tay trước khi phát hành:
 | R5 | glibc quá mới trên máy build | Build trên `ubuntu-22.04`; cân nhắc target musl cho bản tĩnh |
 | R6 | Claude Code trên Linux đổi chỗ cache (`.claude.json`) hoặc tên binary | Đường dẫn đi qua `platform::Paths` + test; quota Fable thiếu thì ẩn, như Windows |
 | R7 | Code platform rẽ nhánh làm hỏng Windows | CI chạy cả hai OS; LNX-013 có test so khớp command line Windows byte-by-byte |
+| R8 | Tương đương "Defender chặn" trên Linux: không có antivirus mặc định, nhưng user (và repo phân phối) cần tin được file tải về | Mỗi asset có `.sha256` như Windows; cân nhắc ký GPG cho tar.gz/AppImage. Ký số Windows (SignPath) không dùng được cho Linux |
+| R9 | Tính năng chạm vào dữ liệu không tin cậy hoặc token có lỗ hổng riêng theo OS (lần trước: UNC trong Ctrl+click, token theo redirect) | Bản Linux của LNX-024b và LNX-032 qua rà soát bảo mật trước khi merge, có test cho từng đường vòng đã biết |
 
 ## 8. Ước lượng
 
 | Giai đoạn | Thời gian | Kết quả |
 |---|---|---|
 | 5.0 + 5.1 | ~3 ngày | Biên dịch và test trên Linux, Windows không đổi hành vi |
-| 5.2 | ~4 ngày | **MVP**: dùng hằng ngày được, phát hành thử `0.3.0-linux-preview` |
+| 5.2 | ~5–6 ngày | **MVP**: dùng hằng ngày được (kèm live usage, hooks, Ctrl+click đường dẫn), phát hành thử `0.3.0-linux-preview` |
 | 5.3 | ~5 ngày | Island trên X11 và KDE/Sway; GNOME Wayland dùng thông báo |
 | 5.4 + 5.5 | ~3 ngày | Tray, phím tắt, release chính thức `0.3.0` |
-| **Tổng** | **~2,5–3 tuần** | |
+| **Tổng** | **~3 tuần** | Thêm 1–2 ngày so với bản plan ở 0.2.0, cho LNX-024b, LNX-028 (hooks) và LNX-032 |
 
 Thứ tự làm: 5.0 → 5.1 → 5.2 phát hành preview → 5.3/5.4 song song → 5.5. Nhánh: `0.3-linux`, mỗi giai đoạn
 một PR vào nhánh đó; merge vào `main` khi 5.2 xong và CI Windows vẫn xanh.
