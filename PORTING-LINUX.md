@@ -11,8 +11,9 @@ phần Windows ra sau một lớp `platform` để Linux có bản cài đặt c
 
 ## Tiến độ (nhánh `linux-port`)
 
-26 `[x]`, 5 `[~]`, còn lại phần island dạng thanh (5.3), icon khay, phím tắt và theo dõi thư
-mục ảnh chụp (5.4). Bản Linux build, lint và test xanh trên CI (ubuntu-22.04); cách cài và những
+27 `[x]`, 5 `[~]`. Còn lại: thanh island vẽ trên X11/Wayland (5.3, LNX-040 tới 046; hiện dùng thông
+báo hệ thống thay), phím tắt Ctrl+Alt+S và theo dõi thư mục ảnh chụp (LNX-051, 052), vốn đi cùng
+thanh island. Bản Linux build, lint và test xanh trên CI (ubuntu-22.04); cách cài và những
 gì khác Windows: [docs/linux.md](docs/linux.md).
 
 Các mục `[~]` (làm theo cách khác plan, đã duyệt khi port):
@@ -172,7 +173,7 @@ Island trên Linux là phần rủi ro nhất. Code vẽ (`view`, `glow`, `masco
 
 ### 5.4 Khay và phím tắt (2 ngày)
 
-- [ ] **LNX-050** Icon khay bằng `ksni`: click trái hiện cửa sổ, menu Show Kilno / Quit Kilno. Không có StatusNotifierWatcher thì không lỗi, chỉ ghi log.
+- [x] **LNX-050** Icon khay bằng `ksni`: click trái hiện cửa sổ, menu Show Kilno / Quit Kilno. Không có StatusNotifierWatcher thì không lỗi, chỉ ghi log.
 - [ ] **LNX-051** Ctrl+Alt+S: X11 `XGrabKey`. Wayland: portal `GlobalShortcuts` (KDE ≥ 5.27, GNOME ≥ 48). Không có thì Settings › Island ghi "not available on this desktop" và bật gợi ý dùng "Offer every new screenshot".
 - [ ] **LNX-052** Theo dõi thư mục ảnh chụp mới, như Windows, đường dẫn theo `xdg-user-dir`.
 

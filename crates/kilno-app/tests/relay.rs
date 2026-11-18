@@ -6,6 +6,9 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// The data folder's name: `%LOCALAPPDATA%\Kilno`, `$XDG_DATA_HOME/kilno`.
+const APP: &str = if cfg!(windows) { "Kilno" } else { "kilno" };
+
 const ID: &str = "0F8E4C2A-1B3D-4E5F-8A9B-0C1D2E3F4A5B";
 
 fn payload() -> Vec<u8> {
@@ -15,12 +18,13 @@ fn payload() -> Vec<u8> {
     .into_bytes()
 }
 
-/// Runs the relay with `args`, the payload on stdin, LOCALAPPDATA pointed at `local`.
+/// Runs the relay with `args`, the payload on stdin, the data folder (LOCALAPPDATA, or XDG_DATA_HOME off Windows) at `local`.
 fn relay(args: &[&str], local: &Path) -> (std::process::Output, Duration) {
     let started = Instant::now();
     let mut child = Command::new(env!("CARGO_BIN_EXE_kilno"))
         .args(args)
         .env("LOCALAPPDATA", local)
+        .env("XDG_DATA_HOME", local)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -32,7 +36,7 @@ fn relay(args: &[&str], local: &Path) -> (std::process::Output, Duration) {
 }
 
 fn saved(local: &Path) -> std::path::PathBuf {
-    local.join("Kilno").join("status").join(format!("{}.json", ID.to_lowercase()))
+    local.join(APP).join("status").join(format!("{}.json", ID.to_lowercase()))
 }
 
 #[test]
@@ -40,14 +44,14 @@ fn pass_echoes_stdin_byte_for_byte_and_saves() {
     let local = tempfile::tempdir().unwrap();
     // The first start of a fresh exe pays for the loader; time the second.
     let _ = relay(&["--statusline", "--pass"], local.path());
-    std::fs::remove_dir_all(local.path().join("Kilno")).unwrap();
+    std::fs::remove_dir_all(local.path().join(APP)).unwrap();
     let (out, took) = relay(&["--statusline", "--pass"], local.path());
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(out.stdout, payload(), "stdout is stdin, unchanged");
     assert!(out.stderr.is_empty());
     assert_eq!(std::fs::read(saved(local.path())).unwrap(), payload(), "the raw bytes are saved");
     // No leftover temp file.
-    let names: Vec<_> = std::fs::read_dir(local.path().join("Kilno").join("status")).unwrap().collect();
+    let names: Vec<_> = std::fs::read_dir(local.path().join(APP).join("status")).unwrap().collect();
     assert_eq!(names.len(), 1);
     // Typically a few ms; generous for a loaded test machine and a debug build.
     assert!(took < Duration::from_millis(if cfg!(debug_assertions) { 1000 } else { 300 }), "relay took {took:?}");
@@ -77,6 +81,7 @@ fn not_json_saves_nothing_and_still_exits_zero() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_kilno"))
         .args(["--statusline", "--pass"])
         .env("LOCALAPPDATA", local.path())
+        .env("XDG_DATA_HOME", local.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -85,5 +90,5 @@ fn not_json_saves_nothing_and_still_exits_zero() {
     let out = child.wait_with_output().unwrap();
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(out.stdout, b"not json");
-    assert!(!local.path().join("Kilno").join("status").exists() || std::fs::read_dir(local.path().join("Kilno").join("status")).unwrap().next().is_none());
+    assert!(!local.path().join(APP).join("status").exists() || std::fs::read_dir(local.path().join(APP).join("status")).unwrap().next().is_none());
 }

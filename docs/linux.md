@@ -37,7 +37,7 @@ Ctrl+click path links, the doc viewer, Settings and the setup window, Update, an
 |---|---|---|
 | Pane's shell | PowerShell | Your login shell (`$SHELL -l`), so the agents on your profile's PATH are found |
 | The island | A bar at the top of the screen | Desktop notifications for "needs you", "done" and errors (`notify-send`); the bar itself is not ported yet |
-| Tray icon | In the notification area | None yet; run `kilno` again to bring a hidden window back |
+| Tray icon | In the notification area | In the tray where the desktop has one (KDE; GNOME with the AppIndicator extension); else run `kilno` again to bring a hidden window back |
 | Ctrl+Alt+S screenshot shortcut | Yes | Not yet |
 | Icons in the chrome | Segoe Fluent / MDL2 | The nearest Unicode symbols (those fonts are Windows-only) |
 | Paste of copied files | From Explorer | From any file manager that copies `file://` URIs |
@@ -47,5 +47,4 @@ Ctrl+click path links, the doc viewer, Settings and the setup window, Update, an
 Paths that could reach the network are never looked up for a Ctrl+click link: anything under
 `/net`, `/smb` or `/afs` and anything inside a mounted NFS, SMB, AFS or sshfs share.
 
-The plan behind the port, with what is left (the island bar on X11 and Wayland, the tray icon,
-the shortcut): [PORTING-LINUX.md](../PORTING-LINUX.md).
+The plan behind the port, with what is left (the island bar on X11 and Wayland, the shortcut): [PORTING-LINUX.md](../PORTING-LINUX.md).
