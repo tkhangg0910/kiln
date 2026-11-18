@@ -109,8 +109,7 @@ fn main() {
     }
 
     let code = app::run(app::Startup { background: start.background, folder: start.folder });
-    #[cfg(windows)]
-    win::tray::remove();
+    os::tray::remove();
     // Hard exit: no stray thread (a PTY reader, a watcher) may keep the process alive, and with
     // it the single-instance mutex.
     std::process::exit(code);

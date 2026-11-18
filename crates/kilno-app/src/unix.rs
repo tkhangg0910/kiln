@@ -260,3 +260,95 @@ mod clip_tests {
         assert_eq!(super::uri_path("file:///bad%zz"), None);
     }
 }
+
+pub mod tray {
+    //! The tray icon off Windows: a StatusNotifierItem (ksni). A click shows the window; its menu
+    //! has Show Kilno and Quit Kilno, as on Windows. Where the desktop has no tray (GNOME without
+    //! the AppIndicator extension) nothing shows and nothing fails: running `kilno` again brings
+    //! the window back.
+
+    use ksni::blocking::TrayMethods;
+    use std::sync::{Arc, Mutex};
+
+    pub enum TrayCmd {
+        Show,
+        Quit,
+    }
+
+    type OnCmd = Arc<dyn Fn(TrayCmd) + Send + Sync>;
+
+    struct KilnoTray {
+        on_cmd: OnCmd,
+    }
+
+    impl ksni::Tray for KilnoTray {
+        fn id(&self) -> String {
+            "kilno".into()
+        }
+
+        fn title(&self) -> String {
+            "Kilno".into()
+        }
+
+        /// The installed icon (install.sh puts it in the hicolor theme); the pixmap below when
+        /// the theme lacks it.
+        fn icon_name(&self) -> String {
+            "kilno".into()
+        }
+
+        fn icon_pixmap(&self) -> Vec<ksni::Icon> {
+            logo().into_iter().collect()
+        }
+
+        fn activate(&mut self, _x: i32, _y: i32) {
+            (self.on_cmd)(TrayCmd::Show);
+        }
+
+        fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
+            use ksni::menu::StandardItem;
+            vec![
+                StandardItem {
+                    label: "Show Kilno".into(),
+                    activate: Box::new(|t: &mut Self| (t.on_cmd)(TrayCmd::Show)),
+                    ..Default::default()
+                }
+                .into(),
+                StandardItem {
+                    label: "Quit Kilno".into(),
+                    activate: Box::new(|t: &mut Self| (t.on_cmd)(TrayCmd::Quit)),
+                    ..Default::default()
+                }
+                .into(),
+            ]
+        }
+    }
+
+    /// The logo as the ARGB32 (network byte order) pixmap the protocol carries.
+    fn logo() -> Option<ksni::Icon> {
+        let img = image::load_from_memory_with_format(include_bytes!("../../../docs/assets/logo.png"), image::ImageFormat::Png)
+            .ok()?
+            .to_rgba8();
+        let (w, h) = img.dimensions();
+        let data = img.pixels().flat_map(|p| [p[3], p[0], p[1], p[2]]).collect();
+        Some(ksni::Icon { width: w as i32, height: h as i32, data })
+    }
+
+    static HANDLE: Mutex<Option<ksni::blocking::Handle<KilnoTray>>> = Mutex::new(None);
+
+    /// Shows the icon; `on_cmd` runs on the tray's thread.
+    pub fn start(on_cmd: impl Fn(TrayCmd) + Send + Sync + 'static) {
+        let tray = KilnoTray { on_cmd: Arc::new(on_cmd) };
+        if let Ok(handle) = tray.spawn() {
+            if let Ok(mut h) = HANDLE.lock() {
+                *h = Some(handle);
+            }
+        }
+    }
+
+    /// Takes the icon away (quit).
+    pub fn remove() {
+        if let Some(h) = HANDLE.lock().ok().and_then(|mut h| h.take()) {
+            h.shutdown();
+        }
+    }
+}

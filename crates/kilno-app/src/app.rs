@@ -394,6 +394,12 @@ impl KilnoApp {
         {
             let w = waker.clone();
             let _ = os::instance::serve(move |msg| w.send(AppEvent::Handoff(msg)));
+            // The tray icon, as on Windows below.
+            let (revealer, w) = (revealer.clone(), waker.clone());
+            os::tray::start(move |cmd| match cmd {
+                os::tray::TrayCmd::Show => revealer.reveal(),
+                os::tray::TrayCmd::Quit => w.send(AppEvent::Island(IslandCmd::Quit)),
+            });
         }
         #[cfg(windows)]
         {
@@ -904,8 +910,7 @@ impl KilnoApp {
         lock(&self.model).panes.clear();
         self.status.stop();
         self.island.shutdown();
-        #[cfg(windows)]
-        win::tray::remove();
+        os::tray::remove();
         if !agents {
             // A hidden window gets no egui pass that would carry out the Close (the island's
             // Quit comes while hidden): end here, as main would after the event loop.

@@ -38,6 +38,8 @@ rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "a
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 # The clipboard (X11 and Wayland) for paste: text, and files copied in a file manager.
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+# The tray icon: StatusNotifierItem over D-Bus (KDE, and GNOME with the AppIndicator extension).
+ksni = { version = "0.3", features = ["blocking"] }
 
 [target.'cfg(windows)'.dependencies]
 # Native Win32 file and folder dialogs (no GTK, no portal: those features are Linux-only).
