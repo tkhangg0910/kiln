@@ -2,6 +2,9 @@
 //! in a temp folder: the environment points into it and the runner answers from a table keyed
 //! "exe|args", so nothing real is run, read or installed (except the real-runner cases).
 
+// Some cases are Windows-only (paths, PowerShell); their helpers sit unused elsewhere.
+#![cfg_attr(not(windows), allow(unused_imports, dead_code))]
+
 use kilno_core::agent::detect::{claude_signed_in, codex_signed_in, AgentDetector};
 use kilno_core::agent::helper::{install_command, sign_in_command, window};
 use kilno_core::agent::{AgentInfo, AgentKind};
