@@ -117,7 +117,9 @@ pub fn open(db: &Path) -> Option<Connection> {
         Ok(c)
     });
     let conn = tried.ok().or_else(|| {
-        let uri = format!("file:{}?immutable=1", db.to_string_lossy().replace('\\', "/").replace('?', "%3f").replace('#', "%23"));
+        // A URI: `%` first, so the escapes added after it are not escaped again.
+        let path = db.to_string_lossy().replace('%', "%25").replace('\\', "/").replace('?', "%3f").replace('#', "%23");
+        let uri = format!("file:{path}?immutable=1");
         Connection::open_with_flags(uri, ro | OpenFlags::SQLITE_OPEN_URI).ok()
     })?;
     // OpenCode may hold a write lock for a moment: wait a little rather than fail the scan.
