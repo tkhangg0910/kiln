@@ -15,6 +15,7 @@ use crate::updater::{UpdateState, Updater};
 use kilno_core::system::updater as update;
 use crate::status_view;
 use crate::theme::{self, *};
+use crate::os;
 use crate::win;
 use chrono::{Local, Utc};
 use kilno_core::agent::claude::ClaudeAgent;
@@ -375,6 +376,12 @@ impl KilnoApp {
             })
         };
 
+        // A second launch's folder (or "" to just show the window) arrives here.
+        #[cfg(unix)]
+        {
+            let w = waker.clone();
+            let _ = os::instance::serve(move |msg| w.send(AppEvent::Handoff(msg)));
+        }
         #[cfg(windows)]
         {
             // A second launch's folder (or "" to just show the window) arrives here.
@@ -1104,8 +1111,7 @@ impl KilnoApp {
                 }
                 ui.add_space(8.0);
                 if ghost_button(ui, None, "OK", true, Some(80.0)).clicked() {
-                    #[cfg(windows)]
-                    win::shell::open(&uri);
+                    os::shell::open(&uri);
                     done = true;
                 }
             });
@@ -1861,8 +1867,7 @@ impl KilnoApp {
             }
             links.extend(out.link);
             if let Some(path) = out.open_path {
-                #[cfg(windows)]
-                win::shell::reveal(&path);
+                os::shell::reveal(&path);
                 #[cfg(not(windows))]
                 let _ = path;
             }

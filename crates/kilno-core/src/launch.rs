@@ -98,6 +98,7 @@ pub fn plan(
 }
 
 /// `"<pwsh.exe>" -NoLogo` when PowerShell 7 is on PATH, else Windows PowerShell.
+#[cfg(windows)]
 pub fn resolve_shell(path: Option<&str>) -> String {
     match find_on_path("pwsh.exe", path) {
         Some(pwsh) => format!("\"{}\" -NoLogo", pwsh.display()),
@@ -105,11 +106,27 @@ pub fn resolve_shell(path: Option<&str>) -> String {
     }
 }
 
-/// The first PATH folder holding `exe`: entries split on `;`, empty ones dropped, quotes
-/// stripped.
+/// The user's login shell (`$SHELL`), else bash, else sh, started as a login shell (`-l`) so
+/// it has the PATH the user's profile sets up, where the agents usually are. The program comes
+/// first, single-quoted when it has a space ([`kilno_pty`] splits on that).
+#[cfg(not(windows))]
+pub fn resolve_shell(_path: Option<&str>) -> String {
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|s| std::path::Path::new(s).is_file())
+        .or_else(|| ["/bin/bash", "/usr/bin/bash", "/bin/sh"].iter().find(|s| std::path::Path::new(s).is_file()).map(|s| s.to_string()))
+        .unwrap_or_else(|| "/bin/sh".to_string());
+    format!("{} -l", crate::text::sh_quote(&shell))
+}
+
+/// The PATH list separator: `;` on Windows, `:` elsewhere.
+pub const PATH_SEP: char = if cfg!(windows) { ';' } else { ':' };
+
+/// The first PATH folder holding `exe`: entries split on [`PATH_SEP`], empty ones dropped,
+/// quotes stripped.
 pub fn find_on_path(exe: &str, path: Option<&str>) -> Option<PathBuf> {
     path?
-        .split(';')
+        .split(PATH_SEP)
         .filter(|d| !d.is_empty())
         .map(|d| PathBuf::from(d.trim_matches('"')).join(exe))
         .find(|c| c.is_file())

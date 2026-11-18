@@ -568,7 +568,7 @@ impl SetupWindow {
                 let gw = text_w(ui, "Get Node.js first", ui_font(12.0));
                 let gr = Rect::from_min_size(Pos2::new(x - gw, line.top()), Vec2::new(gw, 30.0));
                 if link(ui, gr, &format!("get-node-{}", kind.tag()), "Get Node.js first") {
-                    crate::win::shell::open(setup::NODE_URL);
+                    crate::os::shell::open(setup::NODE_URL);
                 }
                 x = gr.left() - 10.0;
             } else {

@@ -24,7 +24,7 @@ pub const MAX_MODEL_NAME: usize = 24;
 pub fn path(env: &dyn Env) -> PathBuf {
     match env.var("CLAUDE_CONFIG_DIR") {
         Some(d) => PathBuf::from(d).join(".claude.json"),
-        None => PathBuf::from(env.var("USERPROFILE").unwrap_or_default()).join(".claude.json"),
+        None => crate::paths::home(env).join(".claude.json"),
     }
 }
 

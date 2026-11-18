@@ -273,13 +273,12 @@ fn live_loop(store: &StatusStore, shared: &Shared, rx: &Receiver<Ask>, poke: &Se
 
 /// One request to the usage endpoint with the Claude sign-in's token. None when signed out, the
 /// token has expired, or the request or its reply fails.
-#[cfg(windows)]
 fn fetch_live() -> Option<AccountLimits> {
     let token = {
         let json = std::fs::read(live::credentials_path(&OsEnv)).ok()?;
         live::read_token(&String::from_utf8_lossy(&json), chrono::Utc::now())?
     };
-    let (status, body) = crate::win::http::get_with(
+    let (status, body) = crate::os::http::get_with(
         live::URL,
         kilno_core::system::updater::USER_AGENT,
         &token.headers(),
@@ -288,11 +287,6 @@ fn fetch_live() -> Option<AccountLimits> {
     .ok()?;
     drop(token);
     (status == 200).then(|| live::parse_reply(&String::from_utf8_lossy(&body), chrono::Utc::now()))?
-}
-
-#[cfg(not(windows))]
-fn fetch_live() -> Option<AccountLimits> {
-    None
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

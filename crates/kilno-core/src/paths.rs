@@ -66,8 +66,9 @@ impl Env for MapEnv {
     }
 }
 
-fn home(env: &dyn Env) -> PathBuf {
-    PathBuf::from(env.var("USERPROFILE").unwrap_or_default())
+/// The user's home: `%USERPROFILE%` on Windows, `$HOME` elsewhere.
+pub fn home(env: &dyn Env) -> PathBuf {
+    PathBuf::from(env.var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default())
 }
 
 /// `%CLAUDE_CONFIG_DIR%`, else `%USERPROFILE%\.claude` (PORTING.md D2: honoured everywhere).
@@ -97,7 +98,12 @@ pub fn opencode_data(env: &dyn Env) -> ReadOnlyDir {
 
 /// `%LOCALAPPDATA%\Kilno`.
 pub fn data_dir(env: &dyn Env) -> DataDir {
-    DataDir(PathBuf::from(env.var("LOCALAPPDATA").unwrap_or_default()).join("Kilno"))
+    if cfg!(windows) {
+        return DataDir(PathBuf::from(env.var("LOCALAPPDATA").unwrap_or_default()).join("Kilno"));
+    }
+    // Elsewhere: `$XDG_DATA_HOME/kilno`, else `~/.local/share/kilno`.
+    let base = env.var("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home(env).join(".local").join("share"));
+    DataDir(base.join("kilno"))
 }
 
 /// `%TEMP%` (falls back to `TMP`, then the OS temp dir).
@@ -111,8 +117,16 @@ pub fn temp_dir(env: &dyn Env) -> PathBuf {
 /// Path as a comparison key: `/` as `\`, trailing separators trimmed, lowercase (Windows paths
 /// compare case-insensitively).
 pub fn norm_key(p: &Path) -> String {
-    let s = p.to_string_lossy().replace('/', "\\");
-    s.trim_end_matches('\\').to_lowercase()
+    if cfg!(windows) {
+        let s = p.to_string_lossy().replace('/', "\\");
+        return s.trim_end_matches('\\').to_lowercase();
+    }
+    // Elsewhere names are case-sensitive: only trailing slashes are dropped.
+    let s = p.to_string_lossy();
+    match s.trim_end_matches('/') {
+        "" if s.starts_with('/') => "/".to_string(),
+        t => t.to_string(),
+    }
 }
 
 /// Two paths name the same folder (case-insensitive, trailing separators ignored).

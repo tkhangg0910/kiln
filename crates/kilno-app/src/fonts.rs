@@ -13,22 +13,57 @@ pub const SEMIBOLD: &str = "semibold";
 pub const ICONS: &str = "icons";
 
 fn add(defs: &mut FontDefinitions, name: &str, file: &str, index: u32) -> bool {
-    let Some(bytes) = map_font(&fonts_dir().join(file)) else { return false };
+    let Some(bytes) = find_font(file).and_then(|p| map_font(&p)) else { return false };
     let mut data = FontData::from_static(bytes);
     data.index = index;
     defs.font_data.insert(name.to_string(), Arc::new(data));
     true
 }
 
+/// Where a font file is: `C:\Windows\Fonts` on Windows; elsewhere the first match under the
+/// usual font folders (system, local, the user's), a few levels deep, by file name.
+fn find_font(file: &str) -> Option<std::path::PathBuf> {
+    use std::path::{Path, PathBuf};
+    if cfg!(windows) {
+        return Some(fonts_dir().join(file));
+    }
+    fn walk(dir: &Path, file: &str, depth: u8) -> Option<PathBuf> {
+        let entries = std::fs::read_dir(dir).ok()?;
+        let mut dirs = Vec::new();
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                dirs.push(p);
+            } else if p.file_name().and_then(|n| n.to_str()) == Some(file) {
+                return Some(p);
+            }
+        }
+        (depth > 0).then(|| dirs.iter().find_map(|d| walk(d, file, depth - 1))).flatten()
+    }
+    let home = kilno_core::paths::home(&kilno_core::paths::OsEnv);
+    [
+        PathBuf::from("/usr/share/fonts"),
+        PathBuf::from("/usr/local/share/fonts"),
+        home.join(".local").join("share").join("fonts"),
+        home.join(".fonts"),
+    ]
+    .iter()
+    .find_map(|d| walk(d, file, 4))
+}
+
 /// Font definitions with system fonts first and egui's built-ins as the last resort.
 pub fn definitions() -> FontDefinitions {
     let mut defs = FontDefinitions::default();
-    let mono = ["CascadiaMono.ttf", "CascadiaCode.ttf", "consola.ttf"]
+    let mono = ["CascadiaMono.ttf", "CascadiaCode.ttf", "consola.ttf", "DejaVuSansMono.ttf", "UbuntuMono-R.ttf", "NotoSansMono-Regular.ttf", "LiberationMono-Regular.ttf"]
         .iter()
         .find_map(|f| add(&mut defs, "mono", f, 0).then_some(()))
         .is_some();
-    let ui = add(&mut defs, "ui", "segoeui.ttf", 0);
-    let semi = add(&mut defs, "ui-semibold", "seguisb.ttf", 0) || add(&mut defs, "ui-semibold", "segoeuib.ttf", 0);
+    let ui = ["segoeui.ttf", "Ubuntu-R.ttf", "NotoSans-Regular.ttf", "DejaVuSans.ttf", "LiberationSans-Regular.ttf"]
+        .iter()
+        .any(|f| add(&mut defs, "ui", f, 0));
+    let semi = ["seguisb.ttf", "segoeuib.ttf", "Ubuntu-M.ttf", "NotoSans-SemiBold.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"]
+        .iter()
+        .any(|f| add(&mut defs, "ui-semibold", f, 0));
     let mut fallback = Vec::new();
     for (name, file) in [
         ("symbol", "seguisym.ttf"),
@@ -36,6 +71,10 @@ pub fn definitions() -> FontDefinitions {
         ("yahei", "msyh.ttc"),
         ("yugothic", "YuGothM.ttc"),
         ("malgun", "malgun.ttf"),
+        // Elsewhere: symbols (the icons' stand-ins, see theme::icon) and CJK.
+        ("dejavu", "DejaVuSans.ttf"),
+        ("symbola", "Symbola.ttf"),
+        ("cjk", "NotoSansCJK-Regular.ttc"),
     ] {
         if add(&mut defs, name, file, 0) {
             fallback.push(name.to_string());

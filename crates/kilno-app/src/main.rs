@@ -18,6 +18,13 @@ mod status_view;
 mod theme;
 mod updater;
 mod win;
+#[cfg(unix)]
+mod unix;
+// The platform layer under one name: Win32 on Windows, xdg-open, ureq and a Unix socket elsewhere.
+#[cfg(windows)]
+use win as os;
+#[cfg(unix)]
+use unix as os;
 
 /// Startup timing marks, written to the file named by `KILNO_STARTUP_LOG` (for BENCH.md).
 pub fn mark(what: &str) {
@@ -90,6 +97,13 @@ fn main() {
         if let (Some(text), Some(name)) = (start.handoff(), win::instance::pipe_name()) {
             win::instance::allow_set_foreground_any();
             let _ = win::instance::send(&name, &text, win::instance::CONNECT_TIMEOUT);
+        }
+        std::process::exit(0);
+    }
+    #[cfg(unix)]
+    if !unix::instance::acquire() {
+        if let Some(text) = start.handoff() {
+            let _ = unix::instance::send(&text);
         }
         std::process::exit(0);
     }

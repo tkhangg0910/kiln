@@ -1,0 +1,203 @@
+//! Linux (and other Unix) counterparts of [`crate::win`]'s modules, under the same names, so a
+//! call site reads the same on both: `os::shell::open`, `os::http::get_with`, `os::instance`.
+//! No `unsafe` here.
+
+pub mod shell {
+    use std::path::Path;
+    use std::process::{Command, Stdio};
+
+    fn spawn(program: &str, args: &[&str]) -> bool {
+        Command::new(program)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_ok()
+    }
+
+    /// A URL, file or folder in what the desktop opens it with (`xdg-open`); not waited for.
+    pub fn open(target: &str) {
+        let _ = spawn("xdg-open", &[target]);
+    }
+
+    /// An agent's own file in whatever opens it; failing that, its folder.
+    pub fn open_file_or_select(path: &Path) {
+        if !spawn("xdg-open", &[&path.to_string_lossy()]) {
+            reveal(path);
+        }
+    }
+
+    /// A local path Ctrl+clicked in a terminal: a folder opens in the file manager; a file is shown
+    /// selected in its folder where the file manager supports it (FileManager1 over D-Bus), else
+    /// its folder opens. Nothing is run: only browsed.
+    pub fn reveal(path: &Path) {
+        if path.is_dir() {
+            open(&path.to_string_lossy());
+            return;
+        }
+        let uri = file_uri(path);
+        let shown = Command::new("dbus-send")
+            .args([
+                "--session",
+                "--print-reply",
+                "--dest=org.freedesktop.FileManager1",
+                "--type=method_call",
+                "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1.ShowItems",
+                &format!("array:string:{uri}"),
+                "string:",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+        if !shown {
+            if let Some(dir) = path.parent() {
+                open(&dir.to_string_lossy());
+            }
+        }
+    }
+
+    /// `file://` and the path, every byte outside the unreserved set and `/` percent-encoded (a
+    /// comma would otherwise split dbus-send's array).
+    pub fn file_uri(path: &Path) -> String {
+        let mut out = String::from("file://");
+        for b in path.to_string_lossy().bytes() {
+            if b.is_ascii_alphanumeric() || b"-._~/".contains(&b) {
+                out.push(b as char);
+            } else {
+                out.push_str(&format!("%{b:02X}"));
+            }
+        }
+        out
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn file_uris_escape_what_could_split_them() {
+            let p = std::path::Path::new("/home/me/a b,c%.rs");
+            assert_eq!(super::file_uri(p), "file:///home/me/a%20b%2Cc%25.rs");
+        }
+    }
+}
+
+pub mod http {
+    use std::io;
+    use std::time::Duration;
+
+    /// GET an https URL: (status code, body). Blocks; call it off the UI thread.
+    pub fn get(url: &str, user_agent: &str, timeout: Duration) -> io::Result<(u32, Vec<u8>)> {
+        get_with(url, user_agent, "", timeout)
+    }
+
+    /// As [`get`], with extra request headers (CRLF-separated). A request with headers does not
+    /// follow redirects, so what they carry (a sign-in token) reaches the named host only.
+    pub fn get_with(url: &str, user_agent: &str, headers: &str, timeout: Duration) -> io::Result<(u32, Vec<u8>)> {
+        if !url.starts_with("https://") {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "not https"));
+        }
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(timeout))
+            .max_redirects(if headers.is_empty() { 5 } else { 0 })
+            .http_status_as_error(false)
+            .user_agent(user_agent)
+            .build()
+            .into();
+        let mut req = agent.get(url);
+        for line in headers.split("\r\n").filter(|l| !l.is_empty()) {
+            if let Some((k, v)) = line.split_once(':') {
+                req = req.header(k.trim(), v.trim());
+            }
+        }
+        let mut resp = req.call().map_err(io::Error::other)?;
+        let status = u32::from(resp.status().as_u16());
+        // GitHub's and Anthropic's answers are a few KB; anything huge is not what we asked for.
+        let body = resp.body_mut().with_config().limit(4 * 1024 * 1024).read_to_vec().map_err(io::Error::other)?;
+        Ok((status, body))
+    }
+}
+
+pub mod instance {
+    //! One Kilno per user: the first one listens on a Unix socket in the runtime folder; a second
+    //! launch hands it its folder over that socket and exits.
+
+    use std::io::{self, BufRead, BufReader, Write};
+    use std::os::unix::net::{UnixListener, UnixStream};
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    /// How long a second launch waits to reach the first.
+    pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+    /// A handoff larger than this is not a folder path; the rest is dropped.
+    const MAX: usize = 64 * 1024;
+
+    static LISTENER: Mutex<Option<UnixListener>> = Mutex::new(None);
+
+    /// `$XDG_RUNTIME_DIR/kilno.sock` (private to the user), else one in Kilno's data folder.
+    pub fn socket_path() -> PathBuf {
+        let name = if cfg!(debug_assertions) { "kilno-dev.sock" } else { "kilno.sock" };
+        match std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) {
+            Some(d) => PathBuf::from(d).join(name),
+            None => kilno_core::paths::data_dir(&kilno_core::paths::OsEnv).join(name),
+        }
+    }
+
+    /// True for the first Kilno: it now owns the socket. False when another one answers on it.
+    /// A socket file nobody answers on is left over from a crash, and is taken over.
+    pub fn acquire() -> bool {
+        let path = socket_path();
+        if UnixStream::connect(&path).is_ok() {
+            return false;
+        }
+        let _ = std::fs::remove_file(&path);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        match UnixListener::bind(&path) {
+            Ok(l) => {
+                if let Ok(mut slot) = LISTENER.lock() {
+                    *slot = Some(l);
+                }
+                true
+            }
+            // Someone bound it between the two calls: they are the first.
+            Err(_) => UnixStream::connect(&path).is_err(),
+        }
+    }
+
+    /// The first Kilno: each handoff (one line) goes to `on_message`, on a background thread.
+    pub fn serve(on_message: impl Fn(String) + Send + 'static) -> io::Result<()> {
+        let listener = LISTENER.lock().ok().and_then(|mut s| s.take()).ok_or_else(|| io::Error::other("not acquired"))?;
+        std::thread::Builder::new().name("kilno-handoff".into()).spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let _ = stream.set_read_timeout(Some(CONNECT_TIMEOUT));
+                let mut line = String::new();
+                if BufReader::new(stream.take_limit()).read_line(&mut line).is_ok() {
+                    on_message(line.trim_end_matches(['\r', '\n']).to_string());
+                }
+            }
+        })?;
+        Ok(())
+    }
+
+    /// A second launch: hand `text` to the first and return.
+    pub fn send(text: &str) -> io::Result<()> {
+        let mut s = UnixStream::connect(socket_path())?;
+        s.set_write_timeout(Some(CONNECT_TIMEOUT))?;
+        s.write_all(text.replace(['\r', '\n'], " ").as_bytes())?;
+        s.write_all(b"\n")
+    }
+
+    trait TakeLimit {
+        fn take_limit(self) -> std::io::Take<UnixStream>;
+    }
+    impl TakeLimit for UnixStream {
+        fn take_limit(self) -> std::io::Take<UnixStream> {
+            std::io::Read::take(self, MAX as u64)
+        }
+    }
+}

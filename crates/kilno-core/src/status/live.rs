@@ -36,7 +36,7 @@ pub const AFTER_FAILURE: Duration = Duration::from_secs(5 * 60);
 pub fn credentials_path(env: &dyn Env) -> PathBuf {
     match env.var("CLAUDE_CONFIG_DIR") {
         Some(d) => PathBuf::from(d).join(".credentials.json"),
-        None => PathBuf::from(env.var("USERPROFILE").unwrap_or_default())
+        None => crate::paths::home(env)
             .join(".claude")
             .join(".credentials.json"),
     }

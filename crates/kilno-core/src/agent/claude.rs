@@ -1,9 +1,10 @@
-//! Claude Code's command lines. Single quotes throughout, because the shell is PowerShell.
+//! Claude Code's command lines. Single quotes throughout, for the pane's shell (PowerShell on
+//! Windows, a POSIX shell elsewhere: [`crate::text::shell_quote`]).
 
 use super::AgentKind;
 use crate::launch::Agent;
 use crate::paths::Env;
-use crate::text::ps_quote;
+use crate::text::{shell_quote, shell_run};
 use std::path::{Path, PathBuf};
 
 /// Claude Code as one pane launches it. Build a fresh one for every launch, so an install or a
@@ -31,9 +32,9 @@ impl ClaudeAgent {
     }
 
     fn command(&self, args: &str) -> String {
-        let mut command = format!("& {} {args}", ps_quote(&self.exe));
+        let mut command = format!("{} {args}", shell_run(&self.exe));
         if let Some(settings) = &self.relay_settings {
-            command += &format!(" --settings {}", ps_quote(&settings.to_string_lossy()));
+            command += &format!(" --settings {}", shell_quote(&settings.to_string_lossy()));
         }
         command
     }
@@ -41,7 +42,7 @@ impl ClaudeAgent {
 
 /// An id is read from transcript contents, so it is quoted like any other text.
 fn id(id: Option<&str>) -> String {
-    ps_quote(id.unwrap_or(""))
+    shell_quote(id.unwrap_or(""))
 }
 
 impl Agent for ClaudeAgent {
