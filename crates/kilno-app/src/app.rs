@@ -16,6 +16,7 @@ use kilno_core::system::updater as update;
 use crate::status_view;
 use crate::theme::{self, *};
 use crate::os;
+#[cfg(windows)]
 use crate::win;
 use chrono::{Local, Utc};
 use kilno_core::agent::claude::ClaudeAgent;
@@ -104,6 +105,7 @@ fn start_visible(start: &Startup, setup_first: bool) -> bool {
 }
 
 fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOptions {
+    #[cfg_attr(not(windows), allow(unused_mut))] // moved onto the work area on Windows only
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("K I L N O")
         .with_inner_size([1280.0, 820.0])
@@ -111,6 +113,7 @@ fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOp
         // The exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.
         .with_icon(Arc::new(egui::IconData::default()))
         .with_visible(visible);
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut centered = true;
     #[cfg(windows)]
     if let Some((x, y, w, h)) = win::primary_work_area() {
@@ -410,11 +413,11 @@ impl KilnoApp {
                     std::process::exit(0);
                 });
             }
-            // Only the per-user Run key, and only from a release build (LoginStartup::can_write).
-            // The installed exe re-registers itself on every start unless turned off.
-            if let Ok(exe) = std::env::current_exe() {
-                let _ = LoginStartup::for_this_user(&data).keep(&exe);
-            }
+        }
+        // Start at login, if you turned it on, follows a Kilno that was moved (a release build only:
+        // LoginStartup::can_write); it is never added here.
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = LoginStartup::for_this_user(&data).keep(&exe);
         }
         // A Claude hook's event goes to the pane open on its session.
         let turns = {
@@ -913,10 +916,9 @@ impl KilnoApp {
 
     fn paste(&self, pane: &Pane) {
         let mode = pane.shared.term.mode();
-        #[cfg(windows)]
-        match win::read_clipboard() {
-            win::Clip::Text(t) => pane.shared.type_keys(&paste_bytes(&t, mode)),
-            win::Clip::Files(files) => {
+        match os::read_clipboard() {
+            os::Clip::Text(t) => pane.shared.type_keys(&paste_bytes(&t, mode)),
+            os::Clip::Files(files) => {
                 let (bytes, images) = file_paste(&files);
                 // Codex reads a pasted image where it is: the image chip remembers it.
                 if pane.agent == AgentKind::Codex {
@@ -925,7 +927,7 @@ impl KilnoApp {
                 }
                 pane.shared.type_keys(&bytes);
             }
-            win::Clip::Nothing => {}
+            os::Clip::Nothing => {}
         }
     }
 
@@ -1038,12 +1040,9 @@ impl KilnoApp {
                     self.focus_terminal = true;
                 }
                 Action::SetLogin(on) => {
-                    #[cfg(windows)]
                     if let Ok(exe) = std::env::current_exe() {
                         let _ = LoginStartup::for_this_user(&self.data).set(on, &exe);
                     }
-                    #[cfg(not(windows))]
-                    let _ = on;
                 }
                 Action::OpenSetup => self.show_setup(ctx),
                 Action::Update => self.update_clicked(),
@@ -1599,10 +1598,7 @@ impl KilnoApp {
                 let gear = ghost_button(ui, Some('\u{E713}'), "", false, Some(30.0)).on_hover_text("Settings");
                 if gear.clicked() {
                     let s = LoginStartup::for_this_user(&self.data);
-                    #[cfg(windows)]
                     let on = s.is_on();
-                    #[cfg(not(windows))]
-                    let on = false;
                     self.login = (on, s.can_write());
                 }
                 Popup::menu(&gear)

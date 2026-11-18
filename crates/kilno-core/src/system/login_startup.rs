@@ -162,3 +162,109 @@ mod reg {
         }
     }
 }
+
+/// Elsewhere (Linux desktops, per the XDG autostart spec): a `kilno.desktop` file in
+/// `$XDG_CONFIG_HOME/autostart` (else `~/.config/autostart`), its `Exec=` the same command the
+/// Run value holds. The same rules: only your switch creates it; a start only repairs it.
+#[cfg(unix)]
+mod desktop {
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    use super::{run_command, LoginStartup, RUN_KEY};
+
+    fn not_found_ok(r: io::Result<()>) -> io::Result<()> {
+        match r {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            r => r,
+        }
+    }
+
+    impl LoginStartup {
+        /// The real autostart folder for [`LoginStartup::for_this_user`]; for any other key (the
+        /// tests), that key taken as a folder.
+        fn desktop_file(&self) -> PathBuf {
+            let dir = if self.key_path == RUN_KEY {
+                let env = crate::paths::OsEnv;
+                crate::paths::Env::var(&env, "XDG_CONFIG_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| crate::paths::home(&env).join(".config"))
+                    .join("autostart")
+            } else {
+                PathBuf::from(&self.key_path)
+            };
+            dir.join(format!("{}.desktop", self.value_name.to_lowercase()))
+        }
+
+        fn exec(&self) -> Option<String> {
+            let text = std::fs::read_to_string(self.desktop_file()).ok()?;
+            text.lines().find_map(|l| l.strip_prefix("Exec=")).map(str::to_string)
+        }
+
+        pub fn is_on(&self) -> bool {
+            self.desktop_file().is_file()
+        }
+
+        /// At every start: only a repair (see the Windows one), never a new entry.
+        pub fn keep(&self, exe: &Path) -> io::Result<()> {
+            if !self.can_write() || self.opt_out.exists() {
+                return Ok(());
+            }
+            match self.exec() {
+                Some(current) if super::needs_repair(&current, exe, |p| p.exists()) => self.write(exe),
+                _ => Ok(()),
+            }
+        }
+
+        pub fn set(&self, on: bool, exe: &Path) -> io::Result<()> {
+            if !self.can_write() {
+                return Ok(());
+            }
+            if on {
+                not_found_ok(std::fs::remove_file(&self.opt_out))?;
+                return self.write(exe);
+            }
+            if let Some(dir) = self.opt_out.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(&self.opt_out, "")?;
+            not_found_ok(std::fs::remove_file(self.desktop_file()))
+        }
+
+        fn write(&self, exe: &Path) -> io::Result<()> {
+            let file = self.desktop_file();
+            let text = format!(
+                "[Desktop Entry]\nType=Application\nName=Kilno\nComment=Starts hidden; the island is ready.\nExec={}\nIcon=kilno\nTerminal=false\nX-GNOME-Autostart-enabled=true\n",
+                run_command(exe)
+            );
+            if std::fs::read_to_string(&file).ok().as_deref() == Some(text.as_str()) {
+                return Ok(());
+            }
+            if let Some(dir) = file.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(file, text)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn desktop_entry_only_from_the_switch() {
+            let dir = tempfile::tempdir().unwrap();
+            let auto = dir.path().join("autostart");
+            let s = LoginStartup::new(auto.to_string_lossy(), "Kilno", dir.path().join("no-login-start"));
+            let exe = dir.path().join("kilno");
+            s.keep(&exe).unwrap();
+            assert!(!s.is_on(), "a start never adds it");
+            s.set(true, &exe).unwrap();
+            assert!(s.is_on());
+            let text = std::fs::read_to_string(auto.join("kilno.desktop")).unwrap();
+            assert!(text.contains(&format!("Exec=\"{}\" --background", exe.display())));
+            s.set(false, &exe).unwrap();
+            assert!(!s.is_on(), "off removes it");
+        }
+    }
+}

@@ -98,20 +98,14 @@ impl SettingsPage {
 
     fn read_login(&mut self) {
         let s = LoginStartup::for_this_user(&self.data);
-        #[cfg(windows)]
         let on = s.is_on();
-        #[cfg(not(windows))]
-        let on = false;
         self.login = (on, s.can_write());
     }
 
     fn set_login(&mut self, on: bool) {
-        #[cfg(windows)]
         if let Ok(exe) = std::env::current_exe() {
             let _ = LoginStartup::for_this_user(&self.data).set(on, &exe);
         }
-        #[cfg(not(windows))]
-        let _ = on;
         self.read_login();
     }
 

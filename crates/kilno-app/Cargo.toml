@@ -36,6 +36,8 @@ wgpu = { version = "30", default-features = false, features = ["vulkan", "gles",
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "async-std"] }
 # HTTPS for the update check and live usage (WinHTTP on Windows); rustls, no OpenSSL.
 ureq = { version = "3", default-features = false, features = ["rustls"] }
+# The clipboard (X11 and Wayland) for paste: text, and files copied in a file manager.
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 
 [target.'cfg(windows)'.dependencies]
 # Native Win32 file and folder dialogs (no GTK, no portal: those features are Linux-only).

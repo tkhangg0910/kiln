@@ -4,7 +4,7 @@
 //! dropped. Dropping kills the child's whole process group.
 
 use super::{clamp_size, PtyConfig, PtyEvent};
-use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

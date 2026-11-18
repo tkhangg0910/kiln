@@ -110,6 +110,7 @@ pub struct SetupWindow {
     mv: Option<SetupMove>,
     since: Instant,
     texture: Option<(TextureHandle, (SetupMove, u64, u32))>,
+    #[cfg_attr(not(windows), allow(dead_code))] // the native window, for its dark caption on Windows
     hwnd: Option<isize>,
     focus: bool,
     pub outcome: Option<Outcome>,
@@ -267,7 +268,6 @@ impl SetupWindow {
             Action::Locate(kind) => self.locate(kind),
             Action::Login(on) => {
                 self.login_on = on;
-                #[cfg(windows)]
                 if let (Ok(exe), Some(data)) = (std::env::current_exe(), data_dir()) {
                     let _ = LoginStartup::for_this_user(&data).set(on, &exe);
                 }
@@ -308,6 +308,7 @@ impl SetupWindow {
 
     /// Locate…: a program that answers --version becomes that agent's saved path.
     fn locate(&mut self, kind: AgentKind) {
+        #[cfg_attr(not(windows), allow(unused_mut))] // owned by the window on Windows only
         let mut d = rfd::FileDialog::new()
             .set_title(setup::locate_title(kind))
             .add_filter("Programs (*.exe;*.cmd)", &["exe", "cmd"]);

@@ -201,3 +201,62 @@ pub mod instance {
         }
     }
 }
+
+/// What the clipboard holds that a paste can use (as [`crate::win`]'s).
+pub enum Clip {
+    Text(String),
+    Files(Vec<String>),
+    Nothing,
+}
+
+/// The clipboard through arboard (X11, or Wayland's data-control). Files copied in a file
+/// manager arrive as `file://` URIs in the text (one per line), and are pasted as paths.
+pub fn read_clipboard() -> Clip {
+    let Ok(text) = arboard::Clipboard::new().and_then(|mut c| c.get_text()) else {
+        return Clip::Nothing;
+    };
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    if !lines.is_empty() && lines.iter().all(|l| l.starts_with("file://")) {
+        let files: Vec<String> = lines.iter().filter_map(|l| uri_path(l.trim())).collect();
+        if !files.is_empty() {
+            return Clip::Files(files);
+        }
+    }
+    if text.is_empty() {
+        Clip::Nothing
+    } else {
+        Clip::Text(text)
+    }
+}
+
+/// `file:///a%20b` → `/a b`; None for a URI with a host or bad escapes.
+fn uri_path(uri: &str) -> Option<String> {
+    let rest = uri.strip_prefix("file://")?;
+    if !rest.starts_with('/') {
+        return None;
+    }
+    let bytes = rest.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let hex = rest.get(i + 1..i + 3)?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+#[cfg(test)]
+mod clip_tests {
+    #[test]
+    fn file_uris_become_paths() {
+        assert_eq!(super::uri_path("file:///home/me/a%20b.png").as_deref(), Some("/home/me/a b.png"));
+        assert_eq!(super::uri_path("file://host/x"), None, "no remote hosts");
+        assert_eq!(super::uri_path("file:///bad%zz"), None);
+    }
+}
