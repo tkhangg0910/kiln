@@ -11,20 +11,23 @@ phần Windows ra sau một lớp `platform` để Linux có bản cài đặt c
 
 ## Tiến độ (nhánh `linux-port`)
 
-27 `[x]`, 5 `[~]`. Còn lại: thanh island vẽ trên X11/Wayland (5.3, LNX-040 tới 046; hiện dùng thông
-báo hệ thống thay), phím tắt Ctrl+Alt+S và theo dõi thư mục ảnh chụp (LNX-051, 052), vốn đi cùng
-thanh island. Bản Linux build, lint và test xanh trên CI (ubuntu-22.04); cách cài và những
-gì khác Windows: [docs/linux.md](docs/linux.md).
+27 `[x]`, 13 `[~]`. Bản Linux build, lint và test xanh trên CI (ubuntu-22.04); cách cài và
+những gì khác Windows: [docs/linux.md](docs/linux.md). Thanh island trên X11/Wayland, phím tắt
+Ctrl+Alt+S và theo dõi thư mục ảnh chụp được duyệt hoãn (2026-11-18), xem cuối danh sách dưới.
 
 Các mục `[~]` (làm theo cách khác plan, đã duyệt khi port):
 - LNX-010: đường dẫn theo OS nằm ngay trong `kilno-core::paths` (`home`, `data_dir`,
   `norm_key` có nhánh `cfg`), không tách thành trait `platform::Paths`.
 - LNX-012, LNX-013: shell vẫn là một chuỗi; trên Unix `kilno-pty::unix::argv` tách thành argv
-  (giữ nguyên từ trong dấu nháy đơn). Bản Windows không đổi byte nào.
-- LNX-016: `os` (`win` / `unix`) gom shell, http, instance và clipboard; tray, caption tối,
-  vùng làm việc vẫn chỉ có trên Windows.
-- LNX-043: thông báo hệ thống thay island trên **mọi** desktop Linux cho tới khi có LNX-041/042,
-  không chỉ GNOME Wayland.
+  (giữ nguyên từ trong dấu nháy đơn, `\` thoát ký tự kế). Bản Windows không đổi byte nào.
+- LNX-016: `os` (`win` / `unix`) gom shell, http, instance, clipboard và tray; caption tối,
+  vùng làm việc vẫn có nhánh `cfg` riêng.
+- LNX-043: thông báo hệ thống thay island trên **mọi** desktop Linux, không chỉ GNOME Wayland.
+- LNX-040 tới 042, 044 tới 046 (hoãn): thanh island vẽ trên X11 và Wayland layer-shell. GNOME
+  Wayland không làm được, và chưa có máy Linux để chạy thử giao diện; thông báo hệ thống
+  (LNX-043) thay cho tới khi làm.
+- LNX-051, 052 (hoãn): phím tắt Ctrl+Alt+S và đưa ảnh chụp mới vào phiên đi cùng thanh island
+  (bộ chọn phiên nằm trên island), nên hoãn theo.
 
 ## 1. Hiện trạng (đo trên `main` @ 0.2.2)
 
@@ -163,19 +166,19 @@ Quy tắc:
 
 Island trên Linux là phần rủi ro nhất. Code vẽ (`view`, `glow`, `mascot`, `anim`, `dib`) giữ nguyên; chỉ phần "đưa bitmap lên màn hình" là theo OS.
 
-- [ ] **LNX-040** Tách `kilno-island::sys` thành trait `Surface { show(rect), set_pixels(&[u8]), set_input_region(rect|none), hide() }`. `win.rs` chỉ là một bản cài đặt.
-- [ ] **LNX-041** X11: cửa sổ override-redirect, visual ARGB32, `_NET_WM_STATE_ABOVE`, input shape rỗng khi chỉ hiện glow; dùng `x11rb`.
-- [ ] **LNX-042** Wayland có `zwlr_layer_shell_v1` (KDE, Sway, Hyprland): layer `overlay`, anchor top, `keyboard_interactivity = none`; dùng `smithay-client-toolkit`.
+- [~] **LNX-040** Tách `kilno-island::sys` thành trait `Surface { show(rect), set_pixels(&[u8]), set_input_region(rect|none), hide() }`. `win.rs` chỉ là một bản cài đặt.
+- [~] **LNX-041** X11: cửa sổ override-redirect, visual ARGB32, `_NET_WM_STATE_ABOVE`, input shape rỗng khi chỉ hiện glow; dùng `x11rb`.
+- [~] **LNX-042** Wayland có `zwlr_layer_shell_v1` (KDE, Sway, Hyprland): layer `overlay`, anchor top, `keyboard_interactivity = none`; dùng `smithay-client-toolkit`.
 - [~] **LNX-043** GNOME Wayland (không có layer-shell): island đổi sang thông báo hệ thống (`org.freedesktop.Notifications`) + chấm báo trên sidebar. Ghi rõ trong docs.
-- [ ] **LNX-044** Kéo thả file vào island (drop-to-ask): X11 XDND; Wayland `wl_data_device`. Nếu không kịp thì `[~]`, vẫn còn kéo thả vào cửa sổ chính.
-- [ ] **LNX-045** HiDPI: scale theo `Xft.dpi` (X11) và `wl_output.scale`/fractional-scale (Wayland).
-- [ ] **LNX-046** Nhiều màn hình: island chọn màn hình chứa cửa sổ Kilno, như Windows.
+- [~] **LNX-044** Kéo thả file vào island (drop-to-ask): X11 XDND; Wayland `wl_data_device`. Nếu không kịp thì `[~]`, vẫn còn kéo thả vào cửa sổ chính.
+- [~] **LNX-045** HiDPI: scale theo `Xft.dpi` (X11) và `wl_output.scale`/fractional-scale (Wayland).
+- [~] **LNX-046** Nhiều màn hình: island chọn màn hình chứa cửa sổ Kilno, như Windows.
 
 ### 5.4 Khay và phím tắt (2 ngày)
 
 - [x] **LNX-050** Icon khay bằng `ksni`: click trái hiện cửa sổ, menu Show Kilno / Quit Kilno. Không có StatusNotifierWatcher thì không lỗi, chỉ ghi log.
-- [ ] **LNX-051** Ctrl+Alt+S: X11 `XGrabKey`. Wayland: portal `GlobalShortcuts` (KDE ≥ 5.27, GNOME ≥ 48). Không có thì Settings › Island ghi "not available on this desktop" và bật gợi ý dùng "Offer every new screenshot".
-- [ ] **LNX-052** Theo dõi thư mục ảnh chụp mới, như Windows, đường dẫn theo `xdg-user-dir`.
+- [~] **LNX-051** Ctrl+Alt+S: X11 `XGrabKey`. Wayland: portal `GlobalShortcuts` (KDE ≥ 5.27, GNOME ≥ 48). Không có thì Settings › Island ghi "not available on this desktop" và bật gợi ý dùng "Offer every new screenshot".
+- [~] **LNX-052** Theo dõi thư mục ảnh chụp mới, như Windows, đường dẫn theo `xdg-user-dir`.
 
 ### 5.5 Phát hành (1–2 ngày)
 
