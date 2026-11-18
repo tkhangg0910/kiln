@@ -888,6 +888,19 @@ mod bind_tests {
         }
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn two_panes_in_one_folder_bind_in_start_order_on_unix() {
+        let mut w = vec![wait("p1", "/a", None, 0), wait("p2", "/a", None, 2)];
+        let codex = [session("s2", "/a/", None, 3), session("s1", "/a", None, 1), session("s3", "/A", None, 1)];
+        let mut taken = HashSet::new();
+        let b = bind_codex_panes(&mut w, &codex, &mut taken);
+        assert_eq!(b, vec![("p1".into(), "s1".into()), ("p2".into(), "s2".into())]);
+        assert!(w.is_empty());
+    }
+
+    // `C:\a\` and `C:\A` are one folder only on Windows.
+    #[cfg(windows)]
     #[test]
     fn two_panes_in_one_folder_bind_in_start_order() {
         let mut w = vec![wait("p1", r"C:\a", None, 0), wait("p2", r"C:\a", None, 2)];

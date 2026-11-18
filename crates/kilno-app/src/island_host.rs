@@ -71,20 +71,14 @@ impl IslandHost for Host {
 
     fn login_state(&self) -> (bool, bool) {
         let s = LoginStartup::for_this_user(&self.data);
-        #[cfg(windows)]
         let on = s.is_on();
-        #[cfg(not(windows))]
-        let on = false;
         (on, s.can_write())
     }
 
     fn set_login(&self, on: bool) {
-        #[cfg(windows)]
         if let Ok(exe) = std::env::current_exe() {
             let _ = LoginStartup::for_this_user(&self.data).set(on, &exe);
         }
-        #[cfg(not(windows))]
-        let _ = on;
     }
 
     fn kilno_active(&self) -> bool {

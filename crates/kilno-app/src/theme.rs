@@ -75,6 +75,38 @@ pub fn icon_font(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(ICONS.into()))
 }
 
+/// A Segoe MDL2 / Fluent glyph as drawn here. Those fonts ship with Windows only and may not be
+/// redistributed, so elsewhere each private-use glyph becomes the nearest Unicode symbol the usual
+/// fonts (DejaVu, Noto) have.
+pub fn icon(c: char) -> char {
+    if cfg!(windows) {
+        return c;
+    }
+    match c {
+        '\u{E70D}' => '\u{25BE}', // chevron down: ▾
+        '\u{E70E}' => '\u{25B4}', // chevron up: ▴
+        '\u{E710}' => '+',
+        '\u{E713}' => '\u{2699}', // settings: ⚙
+        '\u{E722}' => '\u{25CE}', // camera: ◎
+        '\u{E737}' => '\u{25A2}', // ▢
+        '\u{E768}' => '\u{25B6}', // play: ▶
+        '\u{E790}' => '\u{25D0}', // colour: ◐
+        '\u{E7BA}' => '\u{26A0}', // warning: ⚠
+        '\u{E7E8}' => '\u{23FB}', // power: ⏻
+        '\u{E7F4}' => '\u{25AD}', // monitor: ▭
+        '\u{E895}' => '\u{27F3}', // sync: ⟳
+        '\u{E896}' => '\u{2193}', // download: ↓
+        '\u{E8B7}' => '\u{25A4}', // folder: ▤
+        '\u{E8BB}' => '\u{2715}', // close: ✕
+        '\u{E916}' => '\u{25F7}', // stopwatch: ◷
+        '\u{E946}' => '\u{24D8}', // info: ⓘ
+        '\u{E9D2}' => '\u{2261}', // ≡
+        '\u{EA18}' => '\u{25C8}', // shield: ◈
+        c if ('\u{E000}'..='\u{F8FF}').contains(&c) => '\u{2022}', // any other: •
+        c => c,
+    }
+}
+
 /// Install the chrome's visuals: dark graphite, thin scrollbars, clay-free popups.
 pub fn install(ctx: &egui::Context) {
     // Dark always, like the C# window. egui keeps the native caption in sync with its theme
@@ -228,7 +260,7 @@ pub fn ghost_button(ui: &mut Ui, glyph: Option<char>, label: &str, accent: bool,
     let fg = if accent { MENU_HOVER_FG } else { TEXT_PRIMARY };
     let label_g = (!label.is_empty()).then(|| ui.painter().layout_no_wrap(label.to_string(), ui_font(12.0), fg));
     let glyph_size = if label.is_empty() { 15.0 } else { 12.0 };
-    let glyph_g = glyph.map(|c| ui.painter().layout_no_wrap(c.to_string(), icon_font(glyph_size), fg));
+    let glyph_g = glyph.map(|c| ui.painter().layout_no_wrap(icon(c).to_string(), icon_font(glyph_size), fg));
     let gap = if glyph_g.is_some() && label_g.is_some() { 7.0 } else { 0.0 };
     let content =
         label_g.as_ref().map_or(0.0, |g| g.size().x) + glyph_g.as_ref().map_or(0.0, |g| g.size().x) + gap;
@@ -345,7 +377,7 @@ pub fn tick_box(ui: &Ui, rect: Rect, on: bool, enabled: bool) {
 /// A pane header chip (MainWindow.xaml:399-428): QuietButton with no border, padding 7,5, a
 /// 14 px Segoe glyph and maybe a 12 px count 5 px after it; `tint` colours it (a flash).
 pub fn chip_button(ui: &mut Ui, glyph: char, count: Option<&str>, tint: Option<Color32>) -> Response {
-    let g = ui.painter().layout_no_wrap(glyph.to_string(), icon_font(14.0), TEXT_MUTED);
+    let g = ui.painter().layout_no_wrap(icon(glyph).to_string(), icon_font(14.0), TEXT_MUTED);
     let c = count.map(|c| ui.painter().layout_no_wrap(c.to_string(), ui_font(12.0), TEXT_MUTED));
     let w = g.size().x + c.as_ref().map_or(0.0, |c| 5.0 + c.size().x);
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(w + 14.0, 26.0), Sense::click());

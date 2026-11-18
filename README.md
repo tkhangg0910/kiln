@@ -63,6 +63,10 @@ window finds your agents. Run the same line again to update. You can read
 [the script](scripts/install.ps1) first. Building from source and verifying a release:
 [docs/installation.md](docs/installation.md).
 
+On Linux (preview):
+`curl -fsSL https://raw.githubusercontent.com/tkhangg0910/kilno/main/scripts/install.sh | sh`;
+see [docs/linux.md](docs/linux.md).
+
 ## Features
 
 | Feature | What it does |
@@ -88,6 +92,7 @@ window finds your agents. Run the same line again to update. You can read
 | [FAQ](docs/faq.md) | Privacy, accounts, running next to Clayo |
 | [Troubleshooting](docs/troubleshooting.md) | Shortcut conflicts, missing agents or sessions, crash logs |
 | [Claude Code, Codex and OpenCode](docs/AGENTS.md) | What works with each agent |
+| [Linux](docs/linux.md) | Installing on Linux and what differs from Windows |
 | [Testing](docs/testing.md) | How to run the tests and what they cover |
 
 ## Contributing

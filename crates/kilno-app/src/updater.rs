@@ -58,21 +58,12 @@ impl Updater {
 
 /// GitHub's latest release, when it is newer than this build. Any failure is "nothing new".
 fn check() -> Option<Version> {
-    #[cfg(windows)]
-    {
-        let (status, body) =
-            crate::win::http::get(&updater::latest_url(), updater::USER_AGENT, Duration::from_secs(updater::TIMEOUT_SECS))
-                .ok()?;
-        if status != 200 {
-            return None;
-        }
-        updater::newer_from_json(&String::from_utf8_lossy(&body), updater::current())
+    let (status, body) =
+        crate::os::http::get(&updater::latest_url(), updater::USER_AGENT, Duration::from_secs(updater::TIMEOUT_SECS)).ok()?;
+    if status != 200 {
+        return None;
     }
-    #[cfg(not(windows))]
-    {
-        let _ = Duration::ZERO;
-        None
-    }
+    updater::newer_from_json(&String::from_utf8_lossy(&body), updater::current())
 }
 
 /// What the Update button shows: the offer, then the wait once pressed.

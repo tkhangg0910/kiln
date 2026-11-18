@@ -63,7 +63,7 @@ fn versions_parse_like_dotnet() {
 fn script_from_the_tag() {
     assert_eq!(
         script_url(Version::new(1, 0, 2)),
-        "https://raw.githubusercontent.com/tkhangg0910/kilno/v1.0.2/scripts/install.ps1"
+        format!("https://raw.githubusercontent.com/tkhangg0910/kilno/v1.0.2/scripts/{}", if cfg!(windows) { "install.ps1" } else { "install.sh" })
     );
 }
 
@@ -112,6 +112,7 @@ fn idle_when_no_pane_works_or_asks() {
     assert!(!idle([NeedsInput]));
 }
 
+#[cfg(windows)]
 #[test]
 fn install_command_runs_the_tagged_script_with_kilno_dir() {
     let c = install_command(Version::new(1, 0, 7), std::path::Path::new(r"C:\Apps\Kilno\"));
@@ -121,5 +122,16 @@ fn install_command_runs_the_tagged_script_with_kilno_dir() {
     assert!(args[4].contains("irm 'https://raw.githubusercontent.com/tkhangg0910/kilno/v1.0.7/scripts/install.ps1' | iex"));
     let env: Vec<_> = c.get_envs().collect();
     assert_eq!(env, [(std::ffi::OsStr::new("KILNO_DIR"), Some(std::ffi::OsStr::new(r"C:\Apps\Kilno\")))]);
+    assert_eq!(c.get_current_dir(), Some(std::env::temp_dir().as_path()), "not standing in the folder it swaps");
+}
+
+#[cfg(unix)]
+#[test]
+fn install_command_runs_the_tagged_shell_script() {
+    let c = install_command(Version::new(1, 0, 7), std::path::Path::new("/home/me/.local/lib/kilno"));
+    assert_eq!(c.get_program(), "sh");
+    let args: Vec<_> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+    assert_eq!(args[0], "-c");
+    assert!(args[1].contains("curl -fsSL 'https://raw.githubusercontent.com/tkhangg0910/kilno/v1.0.7/scripts/install.sh' | sh"));
     assert_eq!(c.get_current_dir(), Some(std::env::temp_dir().as_path()), "not standing in the folder it swaps");
 }

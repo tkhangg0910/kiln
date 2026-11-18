@@ -92,6 +92,8 @@ pub fn note_kind_for(previous: PaneStatus, now: PaneStatus) -> Option<NoteKind> 
     }
 }
 
+// Off Windows only Notify and Settings' reply are acted on (desktop notifications).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) enum Cmd {
     Notify(IslandNote),
     Resolve(NoteSource),
@@ -107,6 +109,7 @@ pub(crate) enum Cmd {
 
 struct Inner {
     tx: Mutex<Sender<Cmd>>,
+    #[cfg_attr(not(windows), allow(dead_code))] // the island window, woken on Windows
     hwnd: isize,
     thread: Mutex<Option<JoinHandle<()>>>,
 }
@@ -119,6 +122,7 @@ pub struct IslandHandle {
 }
 
 /// WM_APP: commands are waiting.
+#[cfg(windows)]
 pub(crate) const WM_WAKE: u32 = 0x8000;
 
 impl IslandHandle {
@@ -232,14 +236,50 @@ impl Island {
         }
         #[cfg(not(windows))]
         {
-            let _ = (host, rx);
+            // No island window here yet (PORTING-LINUX.md LNX-041/042): its notes become the
+            // desktop's notifications (LNX-043), which every desktop shows, GNOME's Wayland too.
+            let _ = host;
+            let thread = std::thread::Builder::new().name("island".into()).spawn(move || notifications(rx)).ok();
             IslandHandle {
                 inner: Arc::new(Inner {
                     tx: Mutex::new(tx),
                     hwnd: 0,
-                    thread: Mutex::new(None),
+                    thread: Mutex::new(thread),
                 }),
             }
+        }
+    }
+}
+
+/// Off Windows: each note the island would show is sent as a desktop notification (`notify-send`,
+/// part of libnotify, on every common desktop). Tips and reserve warnings included; the urgent
+/// ones (a question, an error) as critical so they stay until dismissed.
+#[cfg(not(windows))]
+fn notifications(rx: mpsc::Receiver<Cmd>) {
+    while let Ok(cmd) = rx.recv() {
+        match cmd {
+            Cmd::Notify(note) => {
+                let (summary, urgency) = match note.kind {
+                    kilno_core::island::trigger::NoteKind::NeedsYou => ("needs you", "critical"),
+                    kilno_core::island::trigger::NoteKind::Error => ("hit an error", "critical"),
+                    kilno_core::island::trigger::NoteKind::Done => ("is done", "normal"),
+                    kilno_core::island::trigger::NoteKind::Reserve => ("is near its limit", "normal"),
+                    kilno_core::island::trigger::NoteKind::Tip => ("", "low"),
+                };
+                let title = format!("{} {summary}", note.name).trim().to_string();
+                let _ = std::process::Command::new("notify-send")
+                    .args(["--app-name=Kilno", "--icon=kilno", &format!("--urgency={urgency}"), "Kilno", &title])
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+            }
+            // No hotkey off Windows yet (LNX-051): never taken.
+            Cmd::Settings { reply, .. } => {
+                let _ = reply.send(false);
+            }
+            Cmd::Shutdown => break,
+            Cmd::Resolve(_) | Cmd::Working(..) | Cmd::Greet => {}
         }
     }
 }

@@ -5,7 +5,7 @@
 use super::AgentKind;
 use crate::launch::Agent;
 use crate::paths::Env;
-use crate::text::ps_quote;
+use crate::text::{shell_quote, shell_run};
 
 /// OpenCode as one pane launches it. Build a fresh one for every launch.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,7 +25,7 @@ impl OpenCodeAgent {
     }
 
     fn exe(&self) -> String {
-        format!("& {}", ps_quote(&self.exe))
+        shell_run(&self.exe)
     }
 }
 
@@ -44,11 +44,11 @@ impl Agent for OpenCodeAgent {
 
     // An id is read from OpenCode's database, so it is quoted like any other text.
     fn resume_command(&self, id: &str) -> String {
-        format!("{} --session {}", self.exe(), ps_quote(id))
+        format!("{} --session {}", self.exe(), shell_quote(id))
     }
 
     fn fork_command(&self, parent_id: &str, _new_id: Option<&str>) -> String {
-        format!("{} --session {} --fork", self.exe(), ps_quote(parent_id))
+        format!("{} --session {} --fork", self.exe(), shell_quote(parent_id))
     }
 }
 
@@ -56,6 +56,16 @@ impl Agent for OpenCodeAgent {
 mod tests {
     use super::*;
 
+    #[cfg(not(windows))]
+    #[test]
+    fn command_lines_for_a_posix_shell() {
+        let a = OpenCodeAgent::new("/home/x/.npm-global/bin/opencode");
+        assert_eq!(a.new_command(None), "'/home/x/.npm-global/bin/opencode'");
+        assert_eq!(a.fork_command("ses_abc", None), "'/home/x/.npm-global/bin/opencode' --session 'ses_abc' --fork");
+        assert_eq!(a.resume_command("x'; rm"), r"'/home/x/.npm-global/bin/opencode' --session 'x'\''; rm'", "an id stays text");
+    }
+
+    #[cfg(windows)]
     #[test]
     fn command_lines() {
         let a = OpenCodeAgent::new(r"C:\Users\x\AppData\Roaming\npm\opencode.cmd");

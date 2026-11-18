@@ -36,7 +36,7 @@ pub const AFTER_FAILURE: Duration = Duration::from_secs(5 * 60);
 pub fn credentials_path(env: &dyn Env) -> PathBuf {
     match env.var("CLAUDE_CONFIG_DIR") {
         Some(d) => PathBuf::from(d).join(".credentials.json"),
-        None => PathBuf::from(env.var("USERPROFILE").unwrap_or_default())
+        None => crate::paths::home(env)
             .join(".claude")
             .join(".credentials.json"),
     }
@@ -112,10 +112,10 @@ mod tests {
 
     #[test]
     fn path_follows_claude_config_dir() {
-        let e = MapEnv::default().with("USERPROFILE", r"C:\Users\x");
-        assert_eq!(credentials_path(&e), PathBuf::from(r"C:\Users\x\.claude\.credentials.json"));
+        let e = MapEnv::default().with("USERPROFILE", r"C:\Users\x").with("HOME", r"C:\Users\x");
+        assert_eq!(credentials_path(&e), PathBuf::from(r"C:\Users\x").join(".claude").join(".credentials.json"));
         let e = e.with("CLAUDE_CONFIG_DIR", r"D:\cc");
-        assert_eq!(credentials_path(&e), PathBuf::from(r"D:\cc\.credentials.json"));
+        assert_eq!(credentials_path(&e), PathBuf::from(r"D:\cc").join(".credentials.json"));
     }
 
     #[test]

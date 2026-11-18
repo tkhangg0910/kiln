@@ -36,6 +36,31 @@ pub fn ps_quote(s: &str) -> String {
     out
 }
 
+/// Quote for a POSIX shell (bash, zsh, sh): wrap in single quotes, each `'` closed, escaped and
+/// reopened (`'\''`). Nothing inside single quotes is special to these shells.
+pub fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', r"'\''"))
+}
+
+/// One word quoted for the pane's shell: PowerShell on Windows, a POSIX shell elsewhere.
+pub fn shell_quote(s: &str) -> String {
+    if cfg!(windows) {
+        ps_quote(s)
+    } else {
+        sh_quote(s)
+    }
+}
+
+/// `exe` as the start of a command line in the pane's shell. PowerShell needs `&` to run a
+/// quoted program; a POSIX shell runs the quoted word itself.
+pub fn shell_run(exe: &str) -> String {
+    if cfg!(windows) {
+        format!("& {}", ps_quote(exe))
+    } else {
+        sh_quote(exe)
+    }
+}
+
 /// A lowercase hyphenated GUID ("D" format), or None if `s` is not a GUID.
 pub fn guid(s: &str) -> Option<String> {
     uuid::Uuid::parse_str(s.trim())

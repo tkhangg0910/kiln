@@ -49,4 +49,4 @@ can own the Ctrl+Alt+S shortcut. To carry your Clayo settings over, copy `settin
 See [AGENTS.md](AGENTS.md) for what works with Claude Code, Codex and OpenCode.
 
 **macOS or Linux?**
-No. Kilno is built on ConPTY and Win32 and runs on Windows 10 and 11 (64-bit) only.
+Linux x86_64: yes, as a preview; see [linux.md](linux.md). macOS: no.

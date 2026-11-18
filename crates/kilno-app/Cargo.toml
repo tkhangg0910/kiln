@@ -27,6 +27,20 @@ egui_commonmark = { version = "0.26", default-features = false, features = ["pul
 # Pasted-image thumbnails and the doc viewer's images: these formats only.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# The X11 and Wayland back ends (winit loads their libraries at run time), and Vulkan / GL for
+# the wgpu fallback in place of Direct3D 12.
+eframe = { version = "0.37", default-features = false, features = ["glow", "accesskit", "wgpu_no_default_features", "x11", "wayland"] }
+wgpu = { version = "30", default-features = false, features = ["vulkan", "gles", "wgsl", "std"] }
+# Portal file dialogs, no GTK.
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "async-std"] }
+# HTTPS for the update check and live usage (WinHTTP on Windows); rustls, no OpenSSL.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+# The clipboard (X11 and Wayland) for paste: text, and files copied in a file manager.
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+# The tray icon: StatusNotifierItem over D-Bus (KDE, and GNOME with the AppIndicator extension).
+ksni = { version = "0.3", features = ["blocking"] }
+
 [target.'cfg(windows)'.dependencies]
 # Native Win32 file and folder dialogs (no GTK, no portal: those features are Linux-only).
 rfd = { version = "0.15", default-features = false }

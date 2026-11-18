@@ -19,8 +19,7 @@ pub fn open(copies: PathBuf, page: &Path) {
     let page = page.to_path_buf();
     let _ = std::thread::Builder::new().name("open page".into()).spawn(move || {
         if let Ok(copy) = pages::browser_copy(&copies, &page, &ASSETS) {
-            #[cfg(windows)]
-            crate::win::shell::open(&copy.to_string_lossy());
+            crate::os::shell::open(&copy.to_string_lossy());
             #[cfg(not(windows))]
             let _ = copy;
         }

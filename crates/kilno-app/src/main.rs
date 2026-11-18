@@ -18,6 +18,13 @@ mod status_view;
 mod theme;
 mod updater;
 mod win;
+#[cfg(unix)]
+mod unix;
+// The platform layer under one name: Win32 on Windows, xdg-open, ureq and a Unix socket elsewhere.
+#[cfg(windows)]
+use win as os;
+#[cfg(unix)]
+use unix as os;
 
 /// Startup timing marks, written to the file named by `KILNO_STARTUP_LOG` (for BENCH.md).
 pub fn mark(what: &str) {
@@ -93,10 +100,16 @@ fn main() {
         }
         std::process::exit(0);
     }
+    #[cfg(unix)]
+    if !unix::instance::acquire() {
+        if let Some(text) = start.handoff() {
+            let _ = unix::instance::send(&text);
+        }
+        std::process::exit(0);
+    }
 
     let code = app::run(app::Startup { background: start.background, folder: start.folder });
-    #[cfg(windows)]
-    win::tray::remove();
+    os::tray::remove();
     // Hard exit: no stray thread (a PTY reader, a watcher) may keep the process alive, and with
     // it the single-instance mutex.
     std::process::exit(code);

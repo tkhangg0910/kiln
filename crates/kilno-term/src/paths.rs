@@ -93,14 +93,44 @@ pub fn resolve(text: &str, cwd: Option<&Path>) -> Option<PathBuf> {
     full.exists().then_some(full)
 }
 
-/// `C:\...` or `\?\C:\...`; on other systems, any absolute path.
+/// `C:\...` or `\\?\C:\...`; on other systems, an absolute path that cannot reach the network:
+/// not under an automounter's `/net`, `/smb` or `/afs` (looking a name up there connects to that
+/// host) and not inside a network file system that is mounted ([`network_mounts`]).
 fn on_local_drive(p: &Path) -> bool {
     use std::path::{Component, Prefix};
     match p.components().next() {
         Some(Component::Prefix(pre)) => matches!(pre.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_)),
-        Some(Component::RootDir) => !cfg!(windows),
+        Some(Component::RootDir) if !cfg!(windows) => {
+            let automount = ["/net", "/smb", "/afs"].iter().any(|m| p.starts_with(m));
+            !automount && !network_mounts(&read_mountinfo()).iter().any(|m| p.starts_with(m))
+        }
         _ => false,
     }
+}
+
+/// `/proc/self/mountinfo`, or "" where there is none.
+fn read_mountinfo() -> String {
+    if cfg!(target_os = "linux") {
+        std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default()
+    } else {
+        String::new()
+    }
+}
+
+/// The mount points of network file systems in a `mountinfo` text: field 5 is the mount point,
+/// and the type follows the ` - ` separator.
+fn network_mounts(mountinfo: &str) -> Vec<PathBuf> {
+    // Not 9p: WSL mounts the Windows drives (/mnt/c) with it, and they are local.
+    const NETWORK: [&str; 8] = ["nfs", "nfs4", "cifs", "smb3", "smbfs", "afs", "ncpfs", "fuse.sshfs"];
+    mountinfo
+        .lines()
+        .filter_map(|l| {
+            let (left, right) = l.split_once(" - ")?;
+            let point = left.split(' ').nth(4)?;
+            let kind = right.split(' ').next()?;
+            NETWORK.contains(&kind).then(|| PathBuf::from(point.replace("\\040", " ")))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -153,5 +183,28 @@ mod tests {
             assert_eq!(resolve(unc, None), None, "never a network or device path: {unc}");
             assert_eq!(resolve(unc, Some(dir.path())), None, "not under a folder either: {unc}");
         }
+    }
+
+    #[test]
+    fn network_mounts_from_mountinfo() {
+        let info = "\
+22 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw
+40 22 0:35 / /mnt/c rw,noatime - 9p drvfs rw
+41 22 0:36 / /srv/nfs\\040share rw - nfs4 host:/x rw
+42 22 0:37 / /home/me/remote rw - fuse.sshfs me@host: rw";
+        assert_eq!(
+            network_mounts(info),
+            [PathBuf::from("/srv/nfs share"), PathBuf::from("/home/me/remote")],
+            "nfs and sshfs; not ext4, not WSL's 9p drives"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn automounted_network_folders_are_never_looked_up() {
+        for p in ["/net/evil-host/x.rs", "/smb/host/share/a.txt", "/afs/cell/f"] {
+            assert!(!on_local_drive(Path::new(p)), "{p}");
+        }
+        assert!(on_local_drive(Path::new("/tmp/x.rs")));
     }
 }

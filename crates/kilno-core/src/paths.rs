@@ -66,8 +66,9 @@ impl Env for MapEnv {
     }
 }
 
-fn home(env: &dyn Env) -> PathBuf {
-    PathBuf::from(env.var("USERPROFILE").unwrap_or_default())
+/// The user's home: `%USERPROFILE%` on Windows, `$HOME` elsewhere.
+pub fn home(env: &dyn Env) -> PathBuf {
+    PathBuf::from(env.var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default())
 }
 
 /// `%CLAUDE_CONFIG_DIR%`, else `%USERPROFILE%\.claude` (PORTING.md D2: honoured everywhere).
@@ -97,7 +98,12 @@ pub fn opencode_data(env: &dyn Env) -> ReadOnlyDir {
 
 /// `%LOCALAPPDATA%\Kilno`.
 pub fn data_dir(env: &dyn Env) -> DataDir {
-    DataDir(PathBuf::from(env.var("LOCALAPPDATA").unwrap_or_default()).join("Kilno"))
+    if cfg!(windows) {
+        return DataDir(PathBuf::from(env.var("LOCALAPPDATA").unwrap_or_default()).join("Kilno"));
+    }
+    // Elsewhere: `$XDG_DATA_HOME/kilno`, else `~/.local/share/kilno`.
+    let base = env.var("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home(env).join(".local").join("share"));
+    DataDir(base.join("kilno"))
 }
 
 /// `%TEMP%` (falls back to `TMP`, then the OS temp dir).
@@ -111,8 +117,16 @@ pub fn temp_dir(env: &dyn Env) -> PathBuf {
 /// Path as a comparison key: `/` as `\`, trailing separators trimmed, lowercase (Windows paths
 /// compare case-insensitively).
 pub fn norm_key(p: &Path) -> String {
-    let s = p.to_string_lossy().replace('/', "\\");
-    s.trim_end_matches('\\').to_lowercase()
+    if cfg!(windows) {
+        let s = p.to_string_lossy().replace('/', "\\");
+        return s.trim_end_matches('\\').to_lowercase();
+    }
+    // Elsewhere names are case-sensitive: only trailing slashes are dropped.
+    let s = p.to_string_lossy();
+    match s.trim_end_matches('/') {
+        "" if s.starts_with('/') => "/".to_string(),
+        t => t.to_string(),
+    }
 }
 
 /// Two paths name the same folder (case-insensitive, trailing separators ignored).
@@ -134,7 +148,10 @@ pub fn leaf(p: &str) -> String {
 pub fn is_inside(dir: &Path, child: &Path) -> bool {
     let d = norm_key(dir);
     let c = norm_key(child);
-    c == d || c.starts_with(&(d + "\\"))
+    let sep = if cfg!(windows) { '\\' } else { '/' };
+    // The Unix root's key already ends in the separator.
+    let prefix = if d.ends_with(sep) { d.clone() } else { format!("{d}{sep}") };
+    c == d || c.starts_with(&prefix)
 }
 
 /// Lexically resolve `.` and `..` (like .NET GetFullPath, without touching the disk).
@@ -158,9 +175,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn leaf_and_inside() {
+    fn leaf_of_either_separator() {
         assert_eq!(leaf(r"C:\work\api\"), "api");
+        assert_eq!(leaf("/work/api/"), "api");
         assert_eq!(leaf("api"), "api");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn inside_on_unix() {
+        assert!(is_inside(Path::new("/work"), Path::new("/work/a.md")));
+        assert!(is_inside(Path::new("/work/"), Path::new("/work")));
+        assert!(!is_inside(Path::new("/Work"), Path::new("/work/a.md")), "case-sensitive");
+        assert!(!is_inside(Path::new("/work"), Path::new("/workshop/a.md")));
+        assert!(is_inside(Path::new("/"), Path::new("/etc")));
+        assert_eq!(normalize(Path::new("/a/b/../c.md")), PathBuf::from("/a/c.md"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn inside_on_windows() {
         assert!(is_inside(Path::new(r"C:\Work"), Path::new(r"c:\work\a.md")));
         assert!(!is_inside(Path::new(r"C:\Work"), Path::new(r"C:\Workshop\a.md")));
         assert_eq!(normalize(Path::new(r"C:\a\b\..\c.md")), PathBuf::from(r"C:\a\c.md"));
@@ -168,11 +202,11 @@ mod tests {
 
     #[test]
     fn claude_dir_honours_config_dir() {
-        let e = MapEnv::default().with("USERPROFILE", r"C:\Users\x");
-        assert_eq!(claude_dir(&e).path(), Path::new(r"C:\Users\x\.claude"));
+        let e = MapEnv::default().with("USERPROFILE", r"C:\Users\x").with("HOME", r"C:\Users\x");
+        assert_eq!(claude_dir(&e).path(), Path::new(r"C:\Users\x").join(".claude"));
         let e = e.with("CLAUDE_CONFIG_DIR", r"D:\cfg");
         assert_eq!(claude_dir(&e).path(), Path::new(r"D:\cfg"));
         let e = e.with("CLAUDE_CONFIG_DIR", "");
-        assert_eq!(claude_dir(&e).path(), Path::new(r"C:\Users\x\.claude"));
+        assert_eq!(claude_dir(&e).path(), Path::new(r"C:\Users\x").join(".claude"));
     }
 }

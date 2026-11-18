@@ -184,7 +184,8 @@ impl AgentDetector {
         let npm = if claude {
             None
         } else {
-            find(env, None, &["npm.cmd"], &[within(env, "ProgramFiles", &["nodejs", "npm.cmd"])])
+            let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
+            find(env, None, &[npm], &[within(env, "ProgramFiles", &["nodejs", "npm.cmd"]), Some(PathBuf::from("/usr/bin/npm"))])
         };
         AgentInfo {
             kind,
@@ -221,6 +222,9 @@ impl AgentDetector {
 /// (if it still exists), then PATH (each name across the whole PATH before the next name),
 /// then the places installers put it.
 pub fn locate(env: &dyn Env, kind: AgentKind, saved_path: Option<&str>) -> Option<String> {
+    if !cfg!(windows) {
+        return locate_unix(env, kind, saved_path);
+    }
     match kind {
         AgentKind::Claude => find(
             env,
@@ -254,6 +258,29 @@ pub fn locate(env: &dyn Env, kind: AgentKind, saved_path: Option<&str>) -> Optio
     }
 }
 
+/// Linux and macOS: the plain name on PATH, then where npm (user prefix), the installers and
+/// package managers put it.
+fn locate_unix(env: &dyn Env, kind: AgentKind, saved_path: Option<&str>) -> Option<String> {
+    let name = match kind {
+        AgentKind::Claude => "claude",
+        AgentKind::Codex => "codex",
+        AgentKind::OpenCode => "opencode",
+    };
+    find(
+        env,
+        saved_path,
+        &[name],
+        &[
+            Some(home(env, &[".local", "bin", name])),
+            Some(home(env, &[".npm-global", "bin", name])),
+            Some(home(env, &[".opencode", "bin", name])),
+            Some(home(env, &[".bun", "bin", name])),
+            Some(PathBuf::from("/usr/local/bin").join(name)),
+            Some(PathBuf::from("/usr/bin").join(name)),
+        ],
+    )
+}
+
 fn find(env: &dyn Env, saved: Option<&str>, names: &[&str], known: &[Option<PathBuf>]) -> Option<String> {
     if let Some(s) = saved.filter(|s| Path::new(s).is_file()) {
         return Some(s.to_string());
@@ -275,7 +302,7 @@ fn data_folder(env: &dyn Env, kind: AgentKind) -> PathBuf {
 }
 
 fn home(env: &dyn Env, parts: &[&str]) -> PathBuf {
-    join(PathBuf::from(env.var("USERPROFILE").unwrap_or_default()), parts)
+    join(crate::paths::home(env), parts)
 }
 
 /// `%variable%\parts…`, or None when the variable is unset or empty.

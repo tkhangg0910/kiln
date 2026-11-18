@@ -2,6 +2,9 @@
 //! 0.160.0 transcripts (2026-10-02), with base_instructions and other bulk left out. The two
 //! "account: newest report wins" cases belong to the status store's tests.
 
+// Some cases are Windows-only (paths, PowerShell); their helpers sit unused elsewhere.
+#![cfg_attr(not(windows), allow(unused_imports, dead_code))]
+
 use chrono::{DateTime, Utc};
 use kilno_core::agent::AgentKind;
 use kilno_core::paths::{MapEnv, ReadOnlyDir};
@@ -232,6 +235,8 @@ fn rows() {
 }
 
 /// Binding a pane Kilno started to the transcript Codex then writes.
+// Folders match case-insensitively, a trailing backslash ignored: Windows only.
+#[cfg(windows)]
 #[test]
 fn find_started_binds_panes() {
     let h = Home::new();

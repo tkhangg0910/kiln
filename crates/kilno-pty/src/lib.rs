@@ -1,4 +1,5 @@
-//! One child process under a Windows pseudoconsole (ConPTY).
+//! One child process under a pseudo-terminal: ConPTY on Windows ([`sys`]), `openpty` elsewhere
+//! ([`unix`]).
 //!
 //! Output arrives as raw bytes on a dedicated read thread, never decoded here: a read can split
 //! a UTF-8 sequence or an escape sequence in half, and the terminal parser reassembles them.
@@ -10,6 +11,8 @@
 
 #[cfg(windows)]
 mod sys;
+#[cfg(unix)]
+pub mod unix;
 
 use std::io;
 use std::path::PathBuf;
@@ -36,6 +39,8 @@ pub enum PtyEvent {
 
 #[cfg(windows)]
 pub use sys::PtyProcess;
+#[cfg(unix)]
+pub use unix::PtyProcess;
 
 /// Spawn `cfg` under a new pseudoconsole. `sink` receives output and the exit, on a background
 /// thread, in order.
@@ -44,9 +49,9 @@ pub fn spawn(cfg: &PtyConfig, sink: impl FnMut(PtyEvent) + Send + 'static) -> io
     sys::PtyProcess::spawn(cfg, Box::new(sink))
 }
 
-#[cfg(not(windows))]
-pub fn spawn(_cfg: &PtyConfig, _sink: impl FnMut(PtyEvent) + Send + 'static) -> io::Result<()> {
-    Err(io::Error::new(io::ErrorKind::Unsupported, "ConPTY needs Windows"))
+#[cfg(unix)]
+pub fn spawn(cfg: &PtyConfig, sink: impl FnMut(PtyEvent) + Send + 'static) -> io::Result<PtyProcess> {
+    unix::PtyProcess::spawn(cfg, Box::new(sink))
 }
 
 /// Size clamped the way the C# did: anything under 1 becomes 80 x 24.

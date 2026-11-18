@@ -47,14 +47,7 @@ pub fn builder(over: Option<Rect>) -> ViewportBuilder {
         .with_resizable(false)
         .with_maximize_button(false)
         .with_icon(Arc::new(egui::IconData::default()));
-    let area = over.or_else(|| {
-        #[cfg(windows)]
-        {
-            crate::win::primary_work_area().map(|(x, y, w, h)| Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)))
-        }
-        #[cfg(not(windows))]
-        None
-    });
+    let area = over.or_else(work_area);
     if let Some(a) = area {
         // The caption (~32) sits above the client area.
         b = b.with_position(Pos2::new(a.center().x - SIZE.x / 2.0, a.center().y - (SIZE.y + 32.0) / 2.0).max(a.min));
@@ -110,6 +103,7 @@ pub struct SetupWindow {
     mv: Option<SetupMove>,
     since: Instant,
     texture: Option<(TextureHandle, (SetupMove, u64, u32))>,
+    #[cfg_attr(not(windows), allow(dead_code))] // the native window, for its dark caption on Windows
     hwnd: Option<isize>,
     focus: bool,
     pub outcome: Option<Outcome>,
@@ -267,7 +261,6 @@ impl SetupWindow {
             Action::Locate(kind) => self.locate(kind),
             Action::Login(on) => {
                 self.login_on = on;
-                #[cfg(windows)]
                 if let (Ok(exe), Some(data)) = (std::env::current_exe(), data_dir()) {
                     let _ = LoginStartup::for_this_user(&data).set(on, &exe);
                 }
@@ -308,6 +301,7 @@ impl SetupWindow {
 
     /// Locate…: a program that answers --version becomes that agent's saved path.
     fn locate(&mut self, kind: AgentKind) {
+        #[cfg_attr(not(windows), allow(unused_mut))] // owned by the window on Windows only
         let mut d = rfd::FileDialog::new()
             .set_title(setup::locate_title(kind))
             .add_filter("Programs (*.exe;*.cmd)", &["exe", "cmd"]);
@@ -568,7 +562,7 @@ impl SetupWindow {
                 let gw = text_w(ui, "Get Node.js first", ui_font(12.0));
                 let gr = Rect::from_min_size(Pos2::new(x - gw, line.top()), Vec2::new(gw, 30.0));
                 if link(ui, gr, &format!("get-node-{}", kind.tag()), "Get Node.js first") {
-                    crate::win::shell::open(setup::NODE_URL);
+                    crate::os::shell::open(setup::NODE_URL);
                 }
                 x = gr.left() - 10.0;
             } else {
@@ -629,6 +623,18 @@ impl SetupWindow {
             x += w;
         }
     }
+}
+
+/// The primary monitor's work area, to centre the window on; None where it isn't known (off
+/// Windows the window manager places it).
+#[cfg(windows)]
+fn work_area() -> Option<Rect> {
+    crate::win::primary_work_area().map(|(x, y, w, h)| Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h)))
+}
+
+#[cfg(not(windows))]
+fn work_area() -> Option<Rect> {
+    None
 }
 
 fn data_dir() -> Option<kilno_core::paths::DataDir> {

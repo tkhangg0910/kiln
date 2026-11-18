@@ -9,6 +9,26 @@ phần Windows ra sau một lớp `platform` để Linux có bản cài đặt c
 
 ---
 
+## Tiến độ (nhánh `linux-port`)
+
+27 `[x]`, 13 `[~]`. Bản Linux build, lint và test xanh trên CI (ubuntu-22.04); cách cài và
+những gì khác Windows: [docs/linux.md](docs/linux.md). Thanh island trên X11/Wayland, phím tắt
+Ctrl+Alt+S và theo dõi thư mục ảnh chụp được duyệt hoãn (2026-11-18), xem cuối danh sách dưới.
+
+Các mục `[~]` (làm theo cách khác plan, đã duyệt khi port):
+- LNX-010: đường dẫn theo OS nằm ngay trong `kilno-core::paths` (`home`, `data_dir`,
+  `norm_key` có nhánh `cfg`), không tách thành trait `platform::Paths`.
+- LNX-012, LNX-013: shell vẫn là một chuỗi; trên Unix `kilno-pty::unix::argv` tách thành argv
+  (giữ nguyên từ trong dấu nháy đơn, `\` thoát ký tự kế). Bản Windows không đổi byte nào.
+- LNX-016: `os` (`win` / `unix`) gom shell, http, instance, clipboard và tray; caption tối,
+  vùng làm việc vẫn có nhánh `cfg` riêng.
+- LNX-043: thông báo hệ thống thay island trên **mọi** desktop Linux, không chỉ GNOME Wayland.
+- LNX-040 tới 042, 044 tới 046 (hoãn): thanh island vẽ trên X11 và Wayland layer-shell. GNOME
+  Wayland không làm được, và chưa có máy Linux để chạy thử giao diện; thông báo hệ thống
+  (LNX-043) thay cho tới khi làm.
+- LNX-051, 052 (hoãn): phím tắt Ctrl+Alt+S và đưa ảnh chụp mới vào phiên đi cùng thanh island
+  (bộ chọn phiên nằm trên island), nên hoãn theo.
+
 ## 1. Hiện trạng (đo trên `main` @ 0.2.2)
 
 | Crate | Dòng | Phụ thuộc Windows | Ghi chú |
@@ -110,63 +130,63 @@ Quy tắc:
 
 ### 5.0 Biên dịch được trên Linux (1 ngày)
 
-- [ ] **LNX-001** CI thêm job `ubuntu-latest`: `cargo check --workspace --all-targets`.
-- [ ] **LNX-002** `cargo test -p kilno-core -p kilno-term` xanh trên Linux. Test nào cứng đường dẫn Windows thì chuyển qua `Env` hoặc gate có lý do.
-- [ ] **LNX-003** `kilno-app` biên dịch được với stub: cửa sổ mở, pane báo "PTY chưa hỗ trợ".
-- [ ] **LNX-004** wgpu: `dx12` chỉ cho Windows, `vulkan`+`gles` cho Linux (target-specific features).
+- [x] **LNX-001** CI thêm job `ubuntu-latest`: `cargo check --workspace --all-targets`.
+- [x] **LNX-002** `cargo test -p kilno-core -p kilno-term` xanh trên Linux. Test nào cứng đường dẫn Windows thì chuyển qua `Env` hoặc gate có lý do.
+- [x] **LNX-003** `kilno-app` biên dịch được với stub: cửa sổ mở, pane báo "PTY chưa hỗ trợ".
+- [x] **LNX-004** wgpu: `dx12` chỉ cho Windows, `vulkan`+`gles` cho Linux (target-specific features).
 
 ### 5.1 Lớp platform (2 ngày)
 
-- [ ] **LNX-010** `kilno-core::platform::Paths`: `data_dir`, `home`, `claude_dir`, `codex_dir`, `claude_json`. `paths.rs` gọi qua đây; test cả hai bộ biến môi trường.
-- [ ] **LNX-011** `find_on_path` dùng `std::env::split_paths` thay cho `split(';')`, và nhận tên file theo OS (`.exe` chỉ trên Windows).
-- [ ] **LNX-012** `Shell`: `resolve_shell` trả argv (`Vec<OsString>`), không trả chuỗi. Windows vẫn ra `pwsh -NoLogo`.
-- [ ] **LNX-013** `PtyConfig.command_line` → `program` + `args` (+ `env`). Bên Windows tự ghép thành command line như hiện tại; test so khớp byte với chuỗi cũ.
-- [ ] **LNX-014** Cách gõ lệnh agent vào shell: quoting `sh` (`'…'`, thay `'` bằng `'\''`) bên cạnh quoting PowerShell. Có test với đường dẫn có dấu cách và ký tự Unicode.
-- [ ] **LNX-015** `ProcessTree::kill`: Windows giữ nguyên; Unix kill cả process group (pane là session leader nhờ `setsid`).
-- [ ] **LNX-016** Gom các `#[cfg(windows)]` trong `app.rs`, `settings_page.rs`, `setup_window.rs`, `island_host.rs`, `pages_open.rs`, `updater.rs` thành lời gọi `os::…`.
+- [~] **LNX-010** `kilno-core::platform::Paths`: `data_dir`, `home`, `claude_dir`, `codex_dir`, `claude_json`. `paths.rs` gọi qua đây; test cả hai bộ biến môi trường.
+- [x] **LNX-011** `find_on_path` dùng `std::env::split_paths` thay cho `split(';')`, và nhận tên file theo OS (`.exe` chỉ trên Windows).
+- [~] **LNX-012** `Shell`: `resolve_shell` trả argv (`Vec<OsString>`), không trả chuỗi. Windows vẫn ra `pwsh -NoLogo`.
+- [~] **LNX-013** `PtyConfig.command_line` → `program` + `args` (+ `env`). Bên Windows tự ghép thành command line như hiện tại; test so khớp byte với chuỗi cũ.
+- [x] **LNX-014** Cách gõ lệnh agent vào shell: quoting `sh` (`'…'`, thay `'` bằng `'\''`) bên cạnh quoting PowerShell. Có test với đường dẫn có dấu cách và ký tự Unicode.
+- [x] **LNX-015** `ProcessTree::kill`: Windows giữ nguyên; Unix kill cả process group (pane là session leader nhờ `setsid`).
+- [~] **LNX-016** Gom các `#[cfg(windows)]` trong `app.rs`, `settings_page.rs`, `setup_window.rs`, `island_host.rs`, `pages_open.rs`, `updater.rs` thành lời gọi `os::…`.
 
 ### 5.2 MVP Linux (3–4 ngày): dùng được hằng ngày, chưa có island
 
-- [ ] **LNX-020** `kilno-pty/sys/unix.rs`: openpty, fork/exec với `setsid` và controlling tty, resize bằng `TIOCSWINSZ`, thread đọc gửi `PtyEvent::Output`, `waitpid` gửi `Exited`. Giữ đúng hợp đồng trong `lib.rs` (không có event sau khi drop).
-- [ ] **LNX-021** Đóng pane: `\x03` hai lần cách 600 ms (giữ nguyên), rồi `SIGHUP` → `SIGKILL` sau `QUIT_GRACE`.
-- [ ] **LNX-022** Đặt `TERM=xterm-256color`, `COLORTERM=truecolor` cho pane; xoá `INHERITED_*` như Windows.
-- [ ] **LNX-023** Một instance: lock + socket. Lần chạy thứ hai gửi thư mục rồi thoát; lần đầu mở pane đúng thư mục đó.
-- [ ] **LNX-024** Updater: `ureq`; asset `linux-x64.tar.gz`; kiểm sha256; thay file bằng `rename`; khởi động lại. Script cập nhật chạy trong thư mục tạm, không đứng trong thư mục cài (bài học lỗi "in use" của 0.2.1).
-- [ ] **LNX-024b** Live usage: `os::http::get_with(url, headers)` bằng `ureq` với `max_redirects(0)`; token đọc từ `live::credentials_path` (đã đúng cho Linux nếu `paths` dùng `HOME`). Test: một redirect 302 không làm request thứ hai mang header `Authorization`.
-- [ ] **LNX-025** `xdg-open` cho file, thư mục, link, HTML page (pages giữ CSP như cũ).
-- [ ] **LNX-026** Hộp chọn thư mục và binary agent qua `rfd` portal; không có portal thì ô nhập tay.
-- [ ] **LNX-027** Setup window tìm `claude`/`codex` theo §4. Nút cài đặt chạy `npm i -g …` hoặc script cài chính thức của Claude Code. Không dùng `sudo`.
-- [ ] **LNX-028** Status line và hooks: ghi `'<đường dẫn kilno>' --statusline [--pass]` và `'<đường dẫn kilno>' --hook working|done|ask` với quoting `sh`. Đọc lại đúng settings Claude đã có. Test round-trip; chạy thử một `claude -p` thật trên Linux để thấy `turns/<session>.txt` được ghi.
-- [ ] **LNX-029** Tự chạy khi đăng nhập qua file `.desktop` autostart, **chỉ khi user bật** (setup hoặc Settings), như Windows từ 0.2.1. Lúc khởi động chỉ sửa `Exec=` khi exe nó trỏ tới không còn (`needs_repair`, đọc dòng `Exec=` thay cho giá trị registry). File đánh dấu `no-login-start` giữ nguyên ý nghĩa.
-- [ ] **LNX-030** Font: bundle sẵn font như Windows. Nếu có dùng font hệ thống thì fallback `fontconfig` (DejaVu/Noto) để không bị ô vuông.
-- [ ] **LNX-031** Icon ứng dụng + `kilno.desktop` (Name, Exec, Icon, `StartupWMClass` khớp app id của eframe) + AppStream metainfo (tên, version, license, link repo): chỗ Linux đặt thông tin mà Windows để trong VERSIONINFO.
-- [ ] **LNX-032** Ctrl+click đường dẫn (`kilno-term::paths`): trên Linux `on_local_drive` hiện nhận mọi đường dẫn tuyệt đối. Chặn thêm những chỗ có thể chạm mạng khi chỉ cần kiểm tra file có tồn tại: `/net/…` và `/smb/…` (autofs có thể tự kết nối tới host do terminal in ra), và mọi đường dẫn nằm dưới một mount mạng (`nfs`, `cifs`, `smbfs`, `sshfs`, `fuse.*`, đọc từ `/proc/self/mountinfo`). Mở file: D-Bus `FileManager1.ShowItems`, không có thì `xdg-open` thư mục chứa nó. Có test cho từng dạng, như test UNC bên Windows.
+- [x] **LNX-020** `kilno-pty/sys/unix.rs`: openpty, fork/exec với `setsid` và controlling tty, resize bằng `TIOCSWINSZ`, thread đọc gửi `PtyEvent::Output`, `waitpid` gửi `Exited`. Giữ đúng hợp đồng trong `lib.rs` (không có event sau khi drop).
+- [x] **LNX-021** Đóng pane: `\x03` hai lần cách 600 ms (giữ nguyên), rồi `SIGHUP` → `SIGKILL` sau `QUIT_GRACE`.
+- [x] **LNX-022** Đặt `TERM=xterm-256color`, `COLORTERM=truecolor` cho pane; xoá `INHERITED_*` như Windows.
+- [x] **LNX-023** Một instance: lock + socket. Lần chạy thứ hai gửi thư mục rồi thoát; lần đầu mở pane đúng thư mục đó.
+- [x] **LNX-024** Updater: `ureq`; asset `linux-x64.tar.gz`; kiểm sha256; thay file bằng `rename`; khởi động lại. Script cập nhật chạy trong thư mục tạm, không đứng trong thư mục cài (bài học lỗi "in use" của 0.2.1).
+- [x] **LNX-024b** Live usage: `os::http::get_with(url, headers)` bằng `ureq` với `max_redirects(0)`; token đọc từ `live::credentials_path` (đã đúng cho Linux nếu `paths` dùng `HOME`). Test: một redirect 302 không làm request thứ hai mang header `Authorization`.
+- [x] **LNX-025** `xdg-open` cho file, thư mục, link, HTML page (pages giữ CSP như cũ).
+- [x] **LNX-026** Hộp chọn thư mục và binary agent qua `rfd` portal; không có portal thì ô nhập tay.
+- [x] **LNX-027** Setup window tìm `claude`/`codex` theo §4. Nút cài đặt chạy `npm i -g …` hoặc script cài chính thức của Claude Code. Không dùng `sudo`.
+- [x] **LNX-028** Status line và hooks: ghi `'<đường dẫn kilno>' --statusline [--pass]` và `'<đường dẫn kilno>' --hook working|done|ask` với quoting `sh`. Đọc lại đúng settings Claude đã có. Test round-trip; chạy thử một `claude -p` thật trên Linux để thấy `turns/<session>.txt` được ghi.
+- [x] **LNX-029** Tự chạy khi đăng nhập qua file `.desktop` autostart, **chỉ khi user bật** (setup hoặc Settings), như Windows từ 0.2.1. Lúc khởi động chỉ sửa `Exec=` khi exe nó trỏ tới không còn (`needs_repair`, đọc dòng `Exec=` thay cho giá trị registry). File đánh dấu `no-login-start` giữ nguyên ý nghĩa.
+- [x] **LNX-030** Font: bundle sẵn font như Windows. Nếu có dùng font hệ thống thì fallback `fontconfig` (DejaVu/Noto) để không bị ô vuông.
+- [x] **LNX-031** Icon ứng dụng + `kilno.desktop` (Name, Exec, Icon, `StartupWMClass` khớp app id của eframe) + AppStream metainfo (tên, version, license, link repo): chỗ Linux đặt thông tin mà Windows để trong VERSIONINFO.
+- [x] **LNX-032** Ctrl+click đường dẫn (`kilno-term::paths`): trên Linux `on_local_drive` hiện nhận mọi đường dẫn tuyệt đối. Chặn thêm những chỗ có thể chạm mạng khi chỉ cần kiểm tra file có tồn tại: `/net/…` và `/smb/…` (autofs có thể tự kết nối tới host do terminal in ra), và mọi đường dẫn nằm dưới một mount mạng (`nfs`, `cifs`, `smbfs`, `sshfs`, `fuse.*`, đọc từ `/proc/self/mountinfo`). Mở file: D-Bus `FileManager1.ShowItems`, không có thì `xdg-open` thư mục chứa nó. Có test cho từng dạng, như test UNC bên Windows.
 
 ### 5.3 Island (4–6 ngày)
 
 Island trên Linux là phần rủi ro nhất. Code vẽ (`view`, `glow`, `mascot`, `anim`, `dib`) giữ nguyên; chỉ phần "đưa bitmap lên màn hình" là theo OS.
 
-- [ ] **LNX-040** Tách `kilno-island::sys` thành trait `Surface { show(rect), set_pixels(&[u8]), set_input_region(rect|none), hide() }`. `win.rs` chỉ là một bản cài đặt.
-- [ ] **LNX-041** X11: cửa sổ override-redirect, visual ARGB32, `_NET_WM_STATE_ABOVE`, input shape rỗng khi chỉ hiện glow; dùng `x11rb`.
-- [ ] **LNX-042** Wayland có `zwlr_layer_shell_v1` (KDE, Sway, Hyprland): layer `overlay`, anchor top, `keyboard_interactivity = none`; dùng `smithay-client-toolkit`.
-- [ ] **LNX-043** GNOME Wayland (không có layer-shell): island đổi sang thông báo hệ thống (`org.freedesktop.Notifications`) + chấm báo trên sidebar. Ghi rõ trong docs.
-- [ ] **LNX-044** Kéo thả file vào island (drop-to-ask): X11 XDND; Wayland `wl_data_device`. Nếu không kịp thì `[~]`, vẫn còn kéo thả vào cửa sổ chính.
-- [ ] **LNX-045** HiDPI: scale theo `Xft.dpi` (X11) và `wl_output.scale`/fractional-scale (Wayland).
-- [ ] **LNX-046** Nhiều màn hình: island chọn màn hình chứa cửa sổ Kilno, như Windows.
+- [~] **LNX-040** Tách `kilno-island::sys` thành trait `Surface { show(rect), set_pixels(&[u8]), set_input_region(rect|none), hide() }`. `win.rs` chỉ là một bản cài đặt.
+- [~] **LNX-041** X11: cửa sổ override-redirect, visual ARGB32, `_NET_WM_STATE_ABOVE`, input shape rỗng khi chỉ hiện glow; dùng `x11rb`.
+- [~] **LNX-042** Wayland có `zwlr_layer_shell_v1` (KDE, Sway, Hyprland): layer `overlay`, anchor top, `keyboard_interactivity = none`; dùng `smithay-client-toolkit`.
+- [~] **LNX-043** GNOME Wayland (không có layer-shell): island đổi sang thông báo hệ thống (`org.freedesktop.Notifications`) + chấm báo trên sidebar. Ghi rõ trong docs.
+- [~] **LNX-044** Kéo thả file vào island (drop-to-ask): X11 XDND; Wayland `wl_data_device`. Nếu không kịp thì `[~]`, vẫn còn kéo thả vào cửa sổ chính.
+- [~] **LNX-045** HiDPI: scale theo `Xft.dpi` (X11) và `wl_output.scale`/fractional-scale (Wayland).
+- [~] **LNX-046** Nhiều màn hình: island chọn màn hình chứa cửa sổ Kilno, như Windows.
 
 ### 5.4 Khay và phím tắt (2 ngày)
 
-- [ ] **LNX-050** Icon khay bằng `ksni`: click trái hiện cửa sổ, menu Show Kilno / Quit Kilno. Không có StatusNotifierWatcher thì không lỗi, chỉ ghi log.
-- [ ] **LNX-051** Ctrl+Alt+S: X11 `XGrabKey`. Wayland: portal `GlobalShortcuts` (KDE ≥ 5.27, GNOME ≥ 48). Không có thì Settings › Island ghi "not available on this desktop" và bật gợi ý dùng "Offer every new screenshot".
-- [ ] **LNX-052** Theo dõi thư mục ảnh chụp mới, như Windows, đường dẫn theo `xdg-user-dir`.
+- [x] **LNX-050** Icon khay bằng `ksni`: click trái hiện cửa sổ, menu Show Kilno / Quit Kilno. Không có StatusNotifierWatcher thì không lỗi, chỉ ghi log.
+- [~] **LNX-051** Ctrl+Alt+S: X11 `XGrabKey`. Wayland: portal `GlobalShortcuts` (KDE ≥ 5.27, GNOME ≥ 48). Không có thì Settings › Island ghi "not available on this desktop" và bật gợi ý dùng "Offer every new screenshot".
+- [~] **LNX-052** Theo dõi thư mục ảnh chụp mới, như Windows, đường dẫn theo `xdg-user-dir`.
 
 ### 5.5 Phát hành (1–2 ngày)
 
-- [ ] **LNX-060** `release.yml` thêm job Linux, build trên `ubuntu-22.04` để glibc đủ cũ (chạy được trên distro mới hơn).
-- [ ] **LNX-061** Asset: `kilno-x.y.z-linux-x64.tar.gz` + `.sha256`; AppImage nếu kịp.
-- [ ] **LNX-062** `scripts/install.sh` (kiểm sha256, không sudo, không sửa shell rc, `cd` ra thư mục tạm trước khi thay thư mục cài, không tự bật autostart).
-- [ ] **LNX-063** Updater chọn asset theo OS; bản Windows cũ (0.2.x) bỏ qua asset Linux. Có test với JSON release mẫu chứa cả hai asset.
-- [ ] **LNX-064** Docs: `installation.md`, `troubleshooting.md` (Wayland, GNOME tray, portal), `faq.md` ("macOS or Linux?"), `architecture.md` (§Process model, Rendering), README.
+- [x] **LNX-060** `release.yml` thêm job Linux, build trên `ubuntu-22.04` để glibc đủ cũ (chạy được trên distro mới hơn).
+- [x] **LNX-061** Asset: `kilno-x.y.z-linux-x64.tar.gz` + `.sha256`; AppImage nếu kịp.
+- [x] **LNX-062** `scripts/install.sh` (kiểm sha256, không sudo, không sửa shell rc, `cd` ra thư mục tạm trước khi thay thư mục cài, không tự bật autostart).
+- [x] **LNX-063** Updater chọn asset theo OS; bản Windows cũ (0.2.x) bỏ qua asset Linux. Có test với JSON release mẫu chứa cả hai asset.
+- [x] **LNX-064** Docs: `installation.md`, `troubleshooting.md` (Wayland, GNOME tray, portal), `faq.md` ("macOS or Linux?"), `architecture.md` (§Process model, Rendering), README.
 
 ## 6. Kiểm thử
 

@@ -15,6 +15,8 @@ use crate::updater::{UpdateState, Updater};
 use kilno_core::system::updater as update;
 use crate::status_view;
 use crate::theme::{self, *};
+use crate::os;
+#[cfg(windows)]
 use crate::win;
 use chrono::{Local, Utc};
 use kilno_core::agent::claude::ClaudeAgent;
@@ -102,14 +104,26 @@ fn start_visible(start: &Startup, setup_first: bool) -> bool {
     !start.background && !setup_first
 }
 
+fn window_icon() -> egui::IconData {
+    if cfg!(windows) {
+        return egui::IconData::default();
+    }
+    eframe::icon_data::from_png_bytes(include_bytes!("../../../docs/assets/logo.png")).unwrap_or_default()
+}
+
 fn native_options(renderer: eframe::Renderer, visible: bool) -> eframe::NativeOptions {
+    #[cfg_attr(not(windows), allow(unused_mut))] // moved onto the work area on Windows only
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("K I L N O")
+        // Linux desktops match the window to kilno.desktop (StartupWMClass) by this.
+        .with_app_id("kilno")
         .with_inner_size([1280.0, 820.0])
         .with_min_inner_size([760.0, 420.0])
-        // The exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.
-        .with_icon(Arc::new(egui::IconData::default()))
+        // Windows: the exe's own icon goes on by handle (win::shell::set_window_icon), not egui's.
+        // Elsewhere the window carries the logo itself.
+        .with_icon(Arc::new(window_icon()))
         .with_visible(visible);
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut centered = true;
     #[cfg(windows)]
     if let Some((x, y, w, h)) = win::primary_work_area() {
@@ -375,6 +389,18 @@ impl KilnoApp {
             })
         };
 
+        // A second launch's folder (or "" to just show the window) arrives here.
+        #[cfg(unix)]
+        {
+            let w = waker.clone();
+            let _ = os::instance::serve(move |msg| w.send(AppEvent::Handoff(msg)));
+            // The tray icon, as on Windows below.
+            let (revealer, w) = (revealer.clone(), waker.clone());
+            os::tray::start(move |cmd| match cmd {
+                os::tray::TrayCmd::Show => revealer.reveal(),
+                os::tray::TrayCmd::Quit => w.send(AppEvent::Island(IslandCmd::Quit)),
+            });
+        }
         #[cfg(windows)]
         {
             // A second launch's folder (or "" to just show the window) arrives here.
@@ -403,11 +429,11 @@ impl KilnoApp {
                     std::process::exit(0);
                 });
             }
-            // Only the per-user Run key, and only from a release build (LoginStartup::can_write).
-            // The installed exe re-registers itself on every start unless turned off.
-            if let Ok(exe) = std::env::current_exe() {
-                let _ = LoginStartup::for_this_user(&data).keep(&exe);
-            }
+        }
+        // Start at login, if you turned it on, follows a Kilno that was moved (a release build only:
+        // LoginStartup::can_write); it is never added here.
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = LoginStartup::for_this_user(&data).keep(&exe);
         }
         // A Claude hook's event goes to the pane open on its session.
         let turns = {
@@ -884,8 +910,7 @@ impl KilnoApp {
         lock(&self.model).panes.clear();
         self.status.stop();
         self.island.shutdown();
-        #[cfg(windows)]
-        win::tray::remove();
+        os::tray::remove();
         if !agents {
             // A hidden window gets no egui pass that would carry out the Close (the island's
             // Quit comes while hidden): end here, as main would after the event loop.
@@ -906,10 +931,9 @@ impl KilnoApp {
 
     fn paste(&self, pane: &Pane) {
         let mode = pane.shared.term.mode();
-        #[cfg(windows)]
-        match win::read_clipboard() {
-            win::Clip::Text(t) => pane.shared.type_keys(&paste_bytes(&t, mode)),
-            win::Clip::Files(files) => {
+        match os::read_clipboard() {
+            os::Clip::Text(t) => pane.shared.type_keys(&paste_bytes(&t, mode)),
+            os::Clip::Files(files) => {
                 let (bytes, images) = file_paste(&files);
                 // Codex reads a pasted image where it is: the image chip remembers it.
                 if pane.agent == AgentKind::Codex {
@@ -918,7 +942,7 @@ impl KilnoApp {
                 }
                 pane.shared.type_keys(&bytes);
             }
-            win::Clip::Nothing => {}
+            os::Clip::Nothing => {}
         }
     }
 
@@ -1031,12 +1055,9 @@ impl KilnoApp {
                     self.focus_terminal = true;
                 }
                 Action::SetLogin(on) => {
-                    #[cfg(windows)]
                     if let Ok(exe) = std::env::current_exe() {
                         let _ = LoginStartup::for_this_user(&self.data).set(on, &exe);
                     }
-                    #[cfg(not(windows))]
-                    let _ = on;
                 }
                 Action::OpenSetup => self.show_setup(ctx),
                 Action::Update => self.update_clicked(),
@@ -1104,8 +1125,7 @@ impl KilnoApp {
                 }
                 ui.add_space(8.0);
                 if ghost_button(ui, None, "OK", true, Some(80.0)).clicked() {
-                    #[cfg(windows)]
-                    win::shell::open(&uri);
+                    os::shell::open(&uri);
                     done = true;
                 }
             });
@@ -1593,10 +1613,7 @@ impl KilnoApp {
                 let gear = ghost_button(ui, Some('\u{E713}'), "", false, Some(30.0)).on_hover_text("Settings");
                 if gear.clicked() {
                     let s = LoginStartup::for_this_user(&self.data);
-                    #[cfg(windows)]
                     let on = s.is_on();
-                    #[cfg(not(windows))]
-                    let on = false;
                     self.login = (on, s.can_write());
                 }
                 Popup::menu(&gear)
@@ -1861,8 +1878,7 @@ impl KilnoApp {
             }
             links.extend(out.link);
             if let Some(path) = out.open_path {
-                #[cfg(windows)]
-                win::shell::reveal(&path);
+                os::shell::reveal(&path);
                 #[cfg(not(windows))]
                 let _ = path;
             }

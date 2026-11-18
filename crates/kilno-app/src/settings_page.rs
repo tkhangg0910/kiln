@@ -98,20 +98,14 @@ impl SettingsPage {
 
     fn read_login(&mut self) {
         let s = LoginStartup::for_this_user(&self.data);
-        #[cfg(windows)]
         let on = s.is_on();
-        #[cfg(not(windows))]
-        let on = false;
         self.login = (on, s.can_write());
     }
 
     fn set_login(&mut self, on: bool) {
-        #[cfg(windows)]
         if let Ok(exe) = std::env::current_exe() {
             let _ = LoginStartup::for_this_user(&self.data).set(on, &exe);
         }
-        #[cfg(not(windows))]
-        let _ = on;
         self.read_login();
     }
 
@@ -209,7 +203,7 @@ impl SettingsPage {
             } else if resp.hovered() {
                 p.rect_filled(r, 4, ROW_HOVER);
             }
-            p.text(Pos2::new(r.left() + 13.0, r.center().y), Align2::CENTER_CENTER, glyph, icon_font(13.0), MUTED_AA);
+            p.text(Pos2::new(r.left() + 13.0, r.center().y), Align2::CENTER_CENTER, icon(glyph), icon_font(13.0), MUTED_AA);
             p.text(Pos2::new(r.left() + 30.0, r.center().y), Align2::LEFT_CENTER, label, ui_font(12.5), TEXT_PRIMARY);
             focus_ring(ui, &resp, r);
             if resp.clicked() {
@@ -264,8 +258,7 @@ impl SettingsPage {
         spec = spec.corners(true, false);
         let r = row(ui, Id::NULL.with("updates"), spec);
         if r.link == Some(0) {
-            #[cfg(windows)]
-            crate::win::shell::open(&updater::release_url(updater::current()));
+            crate::os::shell::open(&updater::release_url(updater::current()));
         }
         if r.button {
             out.push(Out::Update);
@@ -323,8 +316,7 @@ impl SettingsPage {
             spec.min_h = 0.0;
             let r = row(ui, Id::NULL.with("sec-codex"), spec);
             if let (Some(_), Some(path)) = (r.link, &left) {
-                #[cfg(windows)]
-                crate::win::shell::open_file_or_select(path);
+                crate::os::shell::open_file_or_select(path);
                 #[cfg(not(windows))]
                 let _ = path;
             }
@@ -435,8 +427,7 @@ impl SettingsPage {
                     let g = ui.painter().layout_no_wrap("Open file".into(), ui_font(11.5), LINK);
                     let r = Rect::from_min_size(Pos2::new(head.right() - 16.0 - g.size().x, cy - g.size().y / 2.0), g.size());
                     if link_at(ui, Id::NULL.with(("own-open", *chip)), r, g).clicked() {
-                        #[cfg(windows)]
-                        crate::win::shell::open_file_or_select(file);
+                        crate::os::shell::open_file_or_select(file);
                         #[cfg(not(windows))]
                         let _ = file;
                     }
@@ -832,7 +823,7 @@ fn row(ui: &mut Ui, id: Id, r: Row) -> RowOut {
     let mut x = rect.left() + 16.0;
     match r.lead {
         Lead::Icon(c) => {
-            ui.painter().text(Pos2::new(x + 10.0, cy), Align2::CENTER_CENTER, c, icon_font(16.0), r.lead_color);
+            ui.painter().text(Pos2::new(x + 10.0, cy), Align2::CENTER_CENTER, icon(c), icon_font(16.0), r.lead_color);
         }
         Lead::Chip(t) => {
             agent_chip(ui, Pos2::new(x + CHIP_W, cy), t, 1.0, None);
@@ -946,7 +937,7 @@ fn chevron_glyph(open: bool) -> char {
 /// hairline rim), its right edge at `right_center`.
 fn icon_button(ui: &mut Ui, id: Id, right_center: Pos2, glyph: char, rim: bool) -> Response {
     let size = if rim {
-        ui.painter().layout_no_wrap(glyph.to_string(), icon_font(10.0), MUTED_AA).size() + Vec2::new(18.0, 12.0)
+        ui.painter().layout_no_wrap(icon(glyph).to_string(), icon_font(10.0), MUTED_AA).size() + Vec2::new(18.0, 12.0)
     } else {
         Vec2::splat(28.0)
     };
@@ -966,7 +957,7 @@ fn icon_button(ui: &mut Ui, id: Id, right_center: Pos2, glyph: char, rim: bool) 
     } else {
         MUTED_AA
     };
-    p.text(r.center(), Align2::CENTER_CENTER, glyph, icon_font(10.0), fg);
+    p.text(r.center(), Align2::CENTER_CENTER, icon(glyph), icon_font(10.0), fg);
     resp
 }
 
