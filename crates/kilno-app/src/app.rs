@@ -19,6 +19,7 @@ use crate::win;
 use chrono::{Local, Utc};
 use kilno_core::agent::claude::ClaudeAgent;
 use kilno_core::agent::codex::CodexAgent;
+use kilno_core::agent::opencode::OpenCodeAgent;
 use kilno_core::agent::AgentKind;
 use kilno_core::launch::{self, plan, Agent, LaunchMode, LaunchPlan};
 use kilno_core::pane_status::PaneStatus;
@@ -336,7 +337,7 @@ impl KilnoApp {
         let data = data_dir(&env);
         let settings = KilnoSettings::load(&settings::default_path(&data));
         let model: Shared =
-            Arc::new(std::sync::Mutex::new(Model::new(&data, settings.use_claude, settings.use_codex)));
+            Arc::new(std::sync::Mutex::new(Model::new(&data, settings.used_agents())));
         let ctx = cc.egui_ctx.clone();
         let jobs = model::start_worker(model.clone(), move || ctx.request_repaint());
         crate::image_chip::start_poll(model.clone(), cc.egui_ctx.clone());
@@ -566,8 +567,7 @@ impl KilnoApp {
         s.save(&settings::default_path(&self.data));
         {
             let mut m = lock(&self.model);
-            m.use_claude = s.use_claude;
-            m.use_codex = s.use_codex;
+            m.agents = s.used_agents();
         }
         self.screenshot_key_taken = self.island.set_settings(s.screenshot_hotkey, s.screenshot_offer);
         self.status.set_settings(s.clone());
@@ -626,6 +626,7 @@ impl KilnoApp {
         let env = OsEnv;
         match kind {
             AgentKind::Codex => Box::new(CodexAgent::for_this_user(&env, self.settings.codex_path.as_deref())),
+            AgentKind::OpenCode => Box::new(OpenCodeAgent::for_this_user(&env, self.settings.opencode_path.as_deref())),
             AgentKind::Claude => {
                 let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
                 let relay = relay::write_settings(
@@ -759,7 +760,7 @@ impl KilnoApp {
             if p.expected_session_id.is_none() {
                 m.waiting.push(Waiting {
                     placeholder: key.clone(),
-                    pane: UnboundPane { folder: p.working_directory.clone(), parent_id: fork_of, since: Utc::now() },
+                    pane: UnboundPane { agent: p.agent, folder: p.working_directory.clone(), parent_id: fork_of, since: Utc::now() },
                 });
             }
             m.panes.push(pane.shared.clone());
@@ -1692,7 +1693,7 @@ impl KilnoApp {
             .frame(popup_frame(8, MENU_RIM));
         let shown = popup.show(|ui| {
             ui.set_min_width(176.0);
-            for kind in [AgentKind::Claude, AgentKind::Codex] {
+            for kind in self.settings.used_agents() {
                 if menu_item(ui, kind.name(), None, None, true).clicked() {
                     self.actions.push(Action::StartWith(kind));
                     ui.close();
@@ -2017,11 +2018,17 @@ impl KilnoApp {
 
     /// ShowStatusBar: the active pane's strip (Claude's from its status file, Codex's from its
     /// transcript) with its folder's git state, and the footer's limits: the active pane's
-    /// agent's account, or with no pane Codex's when Claude is not in use.
+    /// agent's account, or with no pane Codex's when Claude is not in use. OpenCode reports no
+    /// account limits, so its panes show none.
     fn status_frame(&mut self) -> StatusFrame {
         let now = Utc::now();
-        let codex = self.active_pane().map_or(!self.settings.use_claude, |p| p.agent == AgentKind::Codex);
-        let limits = if codex { self.codex_limits() } else { self.status.claude_limits() };
+        let kind = self.active_pane().map_or(if self.settings.use_claude { AgentKind::Claude } else { AgentKind::Codex }, |p| p.agent);
+        let codex = kind != AgentKind::Claude;
+        let limits = match kind {
+            AgentKind::Claude => self.status.claude_limits(),
+            AgentKind::Codex => self.codex_limits(),
+            AgentKind::OpenCode => None,
+        };
         let strip = self.active_pane().and_then(|pane| {
             let id = pane.shared.session_id()?;
             let session = if codex {

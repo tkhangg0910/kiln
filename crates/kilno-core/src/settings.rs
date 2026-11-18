@@ -41,16 +41,18 @@ pub enum NewSessionAgent {
     #[default]
     Claude,
     Codex,
+    OpenCode,
     Ask,
 }
 
 impl NewSessionAgent {
-    pub const ALL: [NewSessionAgent; 3] = [Self::Claude, Self::Codex, Self::Ask];
+    pub const ALL: [NewSessionAgent; 4] = [Self::Claude, Self::Codex, Self::OpenCode, Self::Ask];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Claude => "Claude",
             Self::Codex => "Codex",
+            Self::OpenCode => "OpenCode",
             Self::Ask => "Ask",
         }
     }
@@ -83,9 +85,12 @@ pub struct KilnoSettings {
     pub setup_done: bool,
     pub use_claude: bool,
     pub use_codex: bool,
+    /// OpenCode, the third agent: off until setup or Settings turns it on.
+    pub use_opencode: bool,
     pub default_agent: NewSessionAgent,
     pub claude_path: Option<String>,
     pub codex_path: Option<String>,
+    pub opencode_path: Option<String>,
     pub screenshot_hotkey: bool,
     pub screenshot_offer: bool,
     pub update_check: bool,
@@ -119,9 +124,11 @@ impl Default for KilnoSettings {
             setup_done: false,
             use_claude: true,
             use_codex: true,
+            use_opencode: false,
             default_agent: NewSessionAgent::Claude,
             claude_path: None,
             codex_path: None,
+            opencode_path: None,
             screenshot_hotkey: true,
             screenshot_offer: false,
             update_check: true,
@@ -155,16 +162,44 @@ impl KilnoSettings {
     /// Who starts a New session; None asks. Never an agent whose Use is off, so with one agent
     /// in use it never asks.
     pub fn new_session_kind(&self) -> Option<AgentKind> {
-        if !self.use_codex {
-            Some(AgentKind::Claude)
-        } else if !self.use_claude {
-            Some(AgentKind::Codex)
-        } else {
-            match self.default_agent {
-                NewSessionAgent::Codex => Some(AgentKind::Codex),
-                NewSessionAgent::Ask => None,
-                NewSessionAgent::Claude => Some(AgentKind::Claude),
-            }
+        let used = self.used_agents();
+        if used.len() <= 1 {
+            // None in use reads as Claude, as before Use ticks existed.
+            return Some(used.first().copied().unwrap_or(AgentKind::Claude));
+        }
+        let pick = match self.default_agent {
+            NewSessionAgent::Claude => Some(AgentKind::Claude),
+            NewSessionAgent::Codex => Some(AgentKind::Codex),
+            NewSessionAgent::OpenCode => Some(AgentKind::OpenCode),
+            NewSessionAgent::Ask => None,
+        };
+        // The default switched off: ask between the ones that are on.
+        pick.filter(|k| used.contains(k))
+    }
+
+    /// The agents whose Use is on, in sidebar order.
+    pub fn used_agents(&self) -> Vec<AgentKind> {
+        [(AgentKind::Claude, self.use_claude), (AgentKind::Codex, self.use_codex), (AgentKind::OpenCode, self.use_opencode)]
+            .into_iter()
+            .filter_map(|(k, on)| on.then_some(k))
+            .collect()
+    }
+
+    /// Whether `kind` is in use.
+    pub fn uses(&self, kind: AgentKind) -> bool {
+        match kind {
+            AgentKind::Claude => self.use_claude,
+            AgentKind::Codex => self.use_codex,
+            AgentKind::OpenCode => self.use_opencode,
+        }
+    }
+
+    /// The binary picked for `kind` with Locate…, if any.
+    pub fn agent_path(&self, kind: AgentKind) -> Option<&str> {
+        match kind {
+            AgentKind::Claude => self.claude_path.as_deref(),
+            AgentKind::Codex => self.codex_path.as_deref(),
+            AgentKind::OpenCode => self.opencode_path.as_deref(),
         }
     }
 
@@ -253,9 +288,11 @@ impl KilnoSettings {
             setup_done: b("setupDone", d.setup_done),
             use_claude: b("useClaude", d.use_claude),
             use_codex: b("useCodex", d.use_codex),
+            use_opencode: b("useOpenCode", d.use_opencode),
             default_agent,
             claude_path: s("claudePath"),
             codex_path: s("codexPath"),
+            opencode_path: s("openCodePath"),
             screenshot_hotkey: b("screenshotHotkey", d.screenshot_hotkey),
             screenshot_offer: b("screenshotOffer", d.screenshot_offer),
             update_check: b("updateCheck", d.update_check),
@@ -302,6 +339,13 @@ impl KilnoSettings {
         }
         if let Some(p) = &self.codex_path {
             w.str("codexPath", p);
+        }
+        // OpenCode keys are written only when set, so a Clayo file saves back unchanged.
+        if self.use_opencode {
+            w.bool("useOpenCode", true);
+        }
+        if let Some(p) = &self.opencode_path {
+            w.str("openCodePath", p);
         }
         w.bool("screenshotHotkey", self.screenshot_hotkey);
         w.bool("screenshotOffer", self.screenshot_offer);

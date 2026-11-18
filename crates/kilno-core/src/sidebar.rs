@@ -171,11 +171,12 @@ impl SessionRow {
         self.show_agent.then(|| self.agent().tag())
     }
 
-    /// Badge colour for the tag: clay for Claude Code, blue for Codex.
+    /// Badge colour for the tag: clay for Claude Code, blue for Codex, green for OpenCode.
     pub fn agent_color(&self) -> &'static str {
         match self.agent() {
             AgentKind::Codex => "#7DBBEB",
             AgentKind::Claude => "#E39A7E",
+            AgentKind::OpenCode => "#A6D9B5",
         }
     }
 
@@ -779,6 +780,8 @@ pub fn layout_signature<Tz: TimeZone>(
 /// A Codex pane waiting for its transcript (placeholder id), in start order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnboundPane {
+    /// Codex or OpenCode: a pane only takes a session of its own agent.
+    pub agent: AgentKind,
     pub folder: String,
     /// The parent, for a fork.
     pub parent_id: Option<String>,
@@ -796,6 +799,7 @@ pub fn codex_bind_window(unbound: &[UnboundPane], i: usize) -> (DateTime<Utc>, D
         .iter()
         .filter(|w| {
             w.since > wait.since
+                && w.agent == wait.agent
                 && w.parent_id == wait.parent_id
                 && (wait.parent_id.is_some()
                     || crate::paths::same_dir(
@@ -810,20 +814,20 @@ pub fn codex_bind_window(unbound: &[UnboundPane], i: usize) -> (DateTime<Utc>, D
     (wait.since, until)
 }
 
-/// A Codex pane waiting for its transcript, under the placeholder id its row is keyed on.
+/// A Codex or OpenCode pane waiting for its session, under the placeholder id its row is keyed on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Waiting {
     pub placeholder: String,
     pub pane: UnboundPane,
 }
 
-/// BindCodexPanes: each waiting pane (in start order) takes the session that
+/// BindCodexPanes (Codex and OpenCode alike): each waiting pane (in start order) takes the session of its own agent that
 /// [`crate::sessions::codex::find_started`] finds for it within [`codex_bind_window`]. Bound panes
 /// leave `waiting` and their new id joins `taken` (the ids live panes already hold). Returns
 /// (placeholder, session id) per bind, for the caller to re-key the row and the pane.
 pub fn bind_codex_panes(
     waiting: &mut Vec<Waiting>,
-    codex: &[SessionInfo],
+    sessions: &[SessionInfo],
     taken: &mut HashSet<String>,
 ) -> Vec<(String, String)> {
     let mut bound = Vec::new();
@@ -833,8 +837,9 @@ pub fn bind_codex_panes(
         };
         let unbound: Vec<UnboundPane> = waiting.iter().map(|w| w.pane.clone()).collect();
         let (since, until) = codex_bind_window(&unbound, i);
+        let mine: Vec<SessionInfo> = sessions.iter().filter(|s| s.agent == w.pane.agent).cloned().collect();
         let Some(found) = crate::sessions::codex::find_started(
-            codex,
+            &mine,
             &w.pane.folder,
             w.pane.parent_id.as_deref(),
             since,
@@ -879,7 +884,7 @@ mod bind_tests {
     fn wait(ph: &str, folder: &str, parent: Option<&str>, since: i64) -> Waiting {
         Waiting {
             placeholder: ph.into(),
-            pane: UnboundPane { folder: folder.into(), parent_id: parent.map(String::from), since: at(since) },
+            pane: UnboundPane { agent: AgentKind::Codex, folder: folder.into(), parent_id: parent.map(String::from), since: at(since) },
         }
     }
 
@@ -917,5 +922,19 @@ mod bind_tests {
         let mut taken = HashSet::from(["held".to_string()]);
         let b = bind_codex_panes(&mut w, &codex, &mut taken);
         assert_eq!(b, vec![("f".into(), "mine".into())]);
+    }
+
+    /// A Codex pane and an OpenCode pane started in one folder each take their own agent's
+    /// session, though the other one is older.
+    #[test]
+    fn panes_take_only_their_own_agents_sessions() {
+        let mut oc = wait("oc", r"C:\a", None, 0);
+        oc.pane.agent = AgentKind::OpenCode;
+        let mut w = vec![wait("cx", r"C:\a", None, 0), oc];
+        let mut opencode = session("ses_oc", r"C:\a", None, 2);
+        opencode.agent = AgentKind::OpenCode;
+        let sessions = [session("codex1", r"C:\a", None, 1), opencode];
+        let b = bind_codex_panes(&mut w, &sessions, &mut HashSet::new());
+        assert_eq!(b, vec![("cx".into(), "codex1".into()), ("oc".into(), "ses_oc".into())]);
     }
 }

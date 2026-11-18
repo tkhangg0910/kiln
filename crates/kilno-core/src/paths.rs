@@ -86,6 +86,15 @@ pub fn codex_home(env: &dyn Env) -> ReadOnlyDir {
     }
 }
 
+/// OpenCode's data folder, which holds `opencode.db`: `%XDG_DATA_HOME%\opencode`, else
+/// `%USERPROFILE%\.local\share\opencode` (OpenCode keeps that layout on Windows too).
+pub fn opencode_data(env: &dyn Env) -> ReadOnlyDir {
+    match env.var("XDG_DATA_HOME") {
+        Some(d) => ReadOnlyDir::new(PathBuf::from(d).join("opencode")),
+        None => ReadOnlyDir::new(home(env).join(".local").join("share").join("opencode")),
+    }
+}
+
 /// `%LOCALAPPDATA%\Kilno`.
 pub fn data_dir(env: &dyn Env) -> DataDir {
     DataDir(PathBuf::from(env.var("LOCALAPPDATA").unwrap_or_default()).join("Kilno"))

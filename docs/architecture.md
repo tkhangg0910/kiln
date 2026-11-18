@@ -1,6 +1,6 @@
 # Architecture
 
-Kilno is a single native Windows process (`kilno.exe`) that hosts several terminal panes, each running a Claude Code or Codex session, plus a separate always-on-top "island" window that reports which session needs attention. No WebView, no embedded runtime.
+Kilno is a single native Windows process (`kilno.exe`) that hosts several terminal panes, each running a Claude Code, Codex or OpenCode session, plus a separate always-on-top "island" window that reports which session needs attention. No WebView, no embedded runtime.
 
 Origin: Kilno is forked from [clayo-rust](https://github.com/tkhangg0910/clayo-rust), the Rust port of [Clayo](https://github.com/YogiOnCode/Clayo) (C#/WPF, MIT) by Yogeswaran Amsavalli.
 
@@ -20,10 +20,10 @@ kilno-app   (eframe/egui UI, setup + settings windows, glue)
 
 | Component | Responsibility |
 |---|---|
-| `kilno-core::sessions` | Reads Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`) transcripts: model, tail, change detection, `notify`-based watching. |
+| `kilno-core::sessions` | Reads Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`) transcripts, and OpenCode's SQLite database (`~/.local/share/opencode/opencode.db`, opened read only through `rusqlite` with SQLite built in): model, tail, change detection, `notify`-based watching. |
 | `kilno-core::status` | Status-line relay, per-session status store (`<data>\status\<guid>.json`), strip formatting, reserve/limit warnings. |
 | `kilno-core::island` | The island's state machine (`trigger`) and the drop-to-ask mention text. |
-| `kilno-core::agent` | Detection and setup of the Claude and Codex executables. |
+| `kilno-core::agent` | Detection and setup of the Claude Code, Codex and OpenCode executables. |
 | `kilno-core::settings`, `store` | `settings.json`, `names.json`, `parents.json` in the data folder. |
 | `kilno-core::security` | "Ask before" rules Kilno adds to sessions it starts; the user's own rules are read-only. |
 | `kilno-core::pages` | Agent-written HTML pages (`<project>\.kilno\pages\*.html`), sealed with a Content-Security-Policy. |

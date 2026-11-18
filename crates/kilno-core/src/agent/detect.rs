@@ -4,7 +4,7 @@
 
 use super::{AgentInfo, AgentKind};
 use crate::launch::find_on_path;
-use crate::paths::{claude_dir, codex_home, norm_key, Env, OsEnv};
+use crate::paths::{claude_dir, codex_home, norm_key, opencode_data, Env, OsEnv};
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -133,6 +133,17 @@ impl AgentDetector {
 
     /// Both agents at once (each runs a few slow processes). Blocks; call it off the UI
     /// thread. Saved paths come from "Locate…".
+    /// Claude Code, Codex and OpenCode at once, in that order. `paths` are their Locate… picks.
+    pub fn detect_all(&self, paths: [Option<&str>; 3]) -> [AgentInfo; 3] {
+        let [claude_path, codex_path, opencode_path] = paths;
+        std::thread::scope(|s| {
+            let opencode = s.spawn(|| self.detect(AgentKind::OpenCode, opencode_path));
+            let [claude, codex] = self.detect_both(claude_path, codex_path);
+            let opencode = opencode.join().unwrap_or_else(|_| self.missing(AgentKind::OpenCode));
+            [claude, codex, opencode]
+        })
+    }
+
     pub fn detect_both(&self, claude_path: Option<&str>, codex_path: Option<&str>) -> [AgentInfo; 2] {
         std::thread::scope(|s| {
             let codex = s.spawn(|| self.detect(AgentKind::Codex, codex_path));
@@ -153,16 +164,22 @@ impl AgentDetector {
             exe = None;
         }
 
-        let signed_in = match exe.as_deref() {
-            Some(e) if claude => claude_signed_in(self.runner.run(e, "auth status").as_deref()),
-            Some(e) => codex_signed_in(self.runner.run(e, "login status").as_deref()),
-            None => false,
+        let signed_in = match (exe.as_deref(), kind) {
+            (Some(e), AgentKind::Claude) => claude_signed_in(self.runner.run(e, "auth status").as_deref()),
+            (Some(e), AgentKind::Codex) => codex_signed_in(self.runner.run(e, "login status").as_deref()),
+            // OpenCode runs its free models with no sign-in; a provider login is optional.
+            (Some(_), AgentKind::OpenCode) => true,
+            (None, _) => false,
         };
 
         let data = data_folder(env, kind);
         // A folder we may not list counts as none, rather than failing the whole setup window.
-        let (sessions, projects) =
-            if claude { count_claude(&data) } else { count_codex(&data) }.unwrap_or((0, 0));
+        let (sessions, projects) = match kind {
+            AgentKind::Claude => count_claude(&data),
+            AgentKind::Codex => count_codex(&data),
+            AgentKind::OpenCode => Ok(crate::sessions::opencode::count(&data)),
+        }
+        .unwrap_or((0, 0));
 
         let npm = if claude {
             None
@@ -224,6 +241,16 @@ pub fn locate(env: &dyn Env, kind: AgentKind, saved_path: Option<&str>) -> Optio
                 within(env, "LOCALAPPDATA", &["Microsoft", "WinGet", "Links", "codex.exe"]),
             ],
         ),
+        AgentKind::OpenCode => find(
+            env,
+            saved_path,
+            &["opencode.cmd", "opencode.exe"],
+            &[
+                within(env, "APPDATA", &["npm", "opencode.cmd"]),
+                Some(home(env, &[".opencode", "bin", "opencode.exe"])),
+                within(env, "LOCALAPPDATA", &["Microsoft", "WinGet", "Links", "opencode.exe"]),
+            ],
+        ),
     }
 }
 
@@ -243,6 +270,7 @@ fn data_folder(env: &dyn Env, kind: AgentKind) -> PathBuf {
     match kind {
         AgentKind::Claude => claude_dir(env).path().to_path_buf(),
         AgentKind::Codex => codex_home(env).path().to_path_buf(),
+        AgentKind::OpenCode => opencode_data(env).path().to_path_buf(),
     }
 }
 

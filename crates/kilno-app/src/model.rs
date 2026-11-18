@@ -1,13 +1,15 @@
 //! The sidebar's data, shared between the UI and the sessions thread.
 //!
-//! The sessions thread owns both transcript stores and their watchers. A settled change
+//! The sessions thread owns the agents' session stores and their watchers. A settled change
 //! rescans on that thread and folds the result in here (RefreshSessions), so rows, Codex pane
 //! binding and Codex turn status keep up while the window is hidden and eframe calls no `ui`.
 
 use crate::pane::PaneShared;
+use kilno_core::agent::AgentKind;
 use kilno_core::paths::{DataDir, OsEnv};
 use kilno_core::sessions::claude::ClaudeStore;
 use kilno_core::sessions::codex::CodexStore;
+use kilno_core::sessions::opencode::OpenCodeStore;
 use kilno_core::sessions::watch::SessionSource;
 use kilno_core::sessions::SessionInfo;
 use kilno_core::sidebar::{bind_codex_panes, Sidebar, Waiting};
@@ -27,22 +29,22 @@ pub struct Model {
     pub hidden: HiddenSessions,
     /// The order sessions were dragged into (`order.json`).
     pub order: SessionOrder,
-    /// Codex panes waiting for their transcript, in start order.
+    /// Codex and OpenCode panes waiting for their session, in start order.
     pub waiting: Vec<Waiting>,
     /// Open panes, the one used last first (the screenshot picker's order).
     pub used: Vec<u64>,
     /// Live panes, in start order.
     pub panes: Vec<Arc<PaneShared>>,
-    /// Either agent's transcript folder exists (else the list shows the empty-state text).
+    /// Some agent's sessions exist (else the list shows the empty-state text).
     pub roots_exist: bool,
-    pub use_claude: bool,
-    pub use_codex: bool,
+    /// The agents in use (Settings › Agents), in sidebar order.
+    pub agents: Vec<AgentKind>,
     /// Bumped on every change that can move rows, so the UI rebuilds its view only then.
     pub generation: u64,
 }
 
 impl Model {
-    pub fn new(data: &DataDir, use_claude: bool, use_codex: bool) -> Self {
+    pub fn new(data: &DataDir, agents: Vec<AgentKind>) -> Self {
         Self {
             sidebar: Sidebar::new(),
             names: SessionNames::open(data),
@@ -53,8 +55,7 @@ impl Model {
             used: Vec::new(),
             panes: Vec::new(),
             roots_exist: true,
-            use_claude,
-            use_codex,
+            agents,
             generation: 0,
         }
     }
@@ -63,32 +64,31 @@ impl Model {
         self.panes.iter().find(|p| p.id == id)
     }
 
-    /// RefreshSessions: bind waiting Codex panes first, so a transcript lands on its pane's row
-    /// instead of growing a second one; feed Codex turns to their panes; fold everything in.
-    pub fn apply_scan(&mut self, claude: Vec<SessionInfo>, codex: Vec<SessionInfo>, roots_exist: bool) {
+    /// RefreshSessions: bind waiting Codex and OpenCode panes first, so a session lands on its
+    /// pane's row instead of growing a second one; feed their turns to their panes; fold
+    /// everything in. `scans` holds the sessions of the agents in use only.
+    pub fn apply_scan(&mut self, scans: Vec<SessionInfo>, roots_exist: bool) {
         let mut taken: HashSet<String> = self.panes.iter().filter_map(|p| p.session_id()).collect();
-        for (old, new) in bind_codex_panes(&mut self.waiting, &codex, &mut taken) {
+        let picks_own_id: Vec<SessionInfo> = scans.iter().filter(|i| i.agent != AgentKind::Claude).cloned().collect();
+        for (old, new) in bind_codex_panes(&mut self.waiting, &picks_own_id, &mut taken) {
             let pane_id = self.sidebar.get(&old).and_then(|r| r.pane.as_ref()).map(|p| p.id);
             self.sidebar.rekey(&old, &new);
             if let Some(p) = pane_id.and_then(|id| self.pane(id)) {
                 p.set_session_id(Some(new));
             }
         }
-        // A Codex pane's working / done is exact in its transcript.
-        for info in &codex {
+        // A Codex or OpenCode pane's working / done is exact in what the agent stored.
+        for info in &picks_own_id {
             let Some(turn) = info.turn else { continue };
             let pane = self.sidebar.get(&info.session_id).and_then(|r| r.pane.as_ref()).map(|p| p.id);
             if let Some(p) = pane.and_then(|id| self.pane(id)) {
                 p.show_turn(turn, info.last_activity);
             }
         }
-        let both = self.use_claude && self.use_codex;
-        let mut infos = if self.use_claude { claude } else { Vec::new() };
-        if self.use_codex {
-            infos.extend(codex);
-        }
+        // The agent's mark on each row only tells rows apart when more than one is in use.
+        let several = self.agents.len() > 1;
         let names = &self.names;
-        self.sidebar.fold(infos, both, |id| names.get(id).map(String::from));
+        self.sidebar.fold(scans, several, |id| names.get(id).map(String::from));
         self.roots_exist = roots_exist;
         self.generation += 1;
     }
@@ -115,10 +115,13 @@ pub fn start_worker(model: Shared, changed: impl Fn() + Send + 'static) -> Sende
         .name("kilno-sessions".into())
         .spawn(move || {
             let env = OsEnv;
-            let mut claude = ClaudeStore::for_this_user(&env);
-            let mut codex = CodexStore::for_this_user(&env);
+            let mut sources: Vec<(AgentKind, Box<dyn SessionSource>)> = vec![
+                (AgentKind::Claude, Box::new(ClaudeStore::for_this_user(&env))),
+                (AgentKind::Codex, Box::new(CodexStore::for_this_user(&env))),
+                (AgentKind::OpenCode, Box::new(OpenCodeStore::for_this_user(&env))),
+            ];
             let _ = me.send(Job::Refresh);
-            for source in [&mut claude as &mut dyn SessionSource, &mut codex] {
+            for (_, source) in &mut sources {
                 let me = me.clone();
                 source.start_watching(Box::new(move || {
                     let _ = me.send(Job::Refresh);
@@ -136,14 +139,15 @@ pub fn start_worker(model: Shared, changed: impl Fn() + Send + 'static) -> Sende
                 if stop {
                     break;
                 }
-                let (use_claude, use_codex) = {
-                    let m = lock(&model);
-                    (m.use_claude, m.use_codex)
-                };
-                let c = if use_claude { claude.scan() } else { Vec::new() };
-                let x = if use_codex { codex.scan() } else { Vec::new() };
-                let roots = claude.root_exists() || codex.root_exists();
-                lock(&model).apply_scan(c, x, roots);
+                let agents = lock(&model).agents.clone();
+                let mut scans = Vec::new();
+                for (kind, source) in &mut sources {
+                    if agents.contains(kind) {
+                        scans.extend(source.scan());
+                    }
+                }
+                let roots = sources.iter().any(|(_, s)| s.root_exists());
+                lock(&model).apply_scan(scans, roots);
                 // Each open pane's transcript, from where the last read stopped, off the lock.
                 let reads: Vec<(Arc<PaneShared>, std::path::PathBuf)> = {
                     let m = lock(&model);
@@ -160,8 +164,9 @@ pub fn start_worker(model: Shared, changed: impl Fn() + Send + 'static) -> Sende
                 }
                 changed();
             }
-            claude.stop_watching();
-            codex.stop_watching();
+            for (_, source) in &mut sources {
+                source.stop_watching();
+            }
         })
         .expect("spawn sessions thread");
     tx
@@ -186,7 +191,7 @@ mod tests {
         // The only test in this crate touching the environment.
         std::env::set_var("CLAUDE_CONFIG_DIR", dir.path().join("claude"));
         std::env::set_var("CODEX_HOME", dir.path().join("codex"));
-        let model: Shared = Arc::new(Mutex::new(Model::new(&DataDir::new(dir.path().join("data")), true, true)));
+        let model: Shared = Arc::new(Mutex::new(Model::new(&DataDir::new(dir.path().join("data")), vec![kilno_core::agent::AgentKind::Claude, kilno_core::agent::AgentKind::Codex])));
         let (tx, rx) = channel();
         let jobs = start_worker(model.clone(), move || {
             let _ = tx.send(());

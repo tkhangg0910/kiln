@@ -811,6 +811,7 @@ fn t(min: i64) -> DateTime<Utc> {
 
 fn ub(folder: &str, parent: Option<&str>, since: i64) -> UnboundPane {
     UnboundPane {
+        agent: AgentKind::Codex,
         folder: folder.into(),
         parent_id: parent.map(Into::into),
         since: t(since),

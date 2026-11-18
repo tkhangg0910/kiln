@@ -43,6 +43,7 @@ pub struct SetupView {
     pub intro: String,
     pub claude: AgentRowView,
     pub codex: AgentRowView,
+    pub opencode: AgentRowView,
     pub show_picker: bool,
     pub options_enabled: bool,
     pub note: String,
@@ -57,9 +58,10 @@ const FOLLOW_ALONG: &str =
 pub fn checking() -> SetupView {
     SetupView {
         title: "Setting up Kilno".into(),
-        intro: "Looking for Claude Code and Codex on this PC…".into(),
+        intro: "Looking for Claude Code, Codex and OpenCode on this PC…".into(),
         claude: AgentRowView::new(AgentKind::Claude, AgentRowState::Looking, LOOKING),
         codex: AgentRowView::new(AgentKind::Codex, AgentRowState::Looking, LOOKING),
+        opencode: AgentRowView::new(AgentKind::OpenCode, AgentRowState::Looking, LOOKING),
         show_picker: false,
         options_enabled: false,
         note: "Takes about a second.".into(),
@@ -73,6 +75,7 @@ pub fn installing(found: &SetupView, kind: AgentKind) -> SetupView {
     let meta = match kind {
         AgentKind::Claude => "Running the official installer…",
         AgentKind::Codex => "Running npm install -g @openai/codex…",
+        AgentKind::OpenCode => "Running npm install -g opencode-ai…",
     };
     SetupView {
         title: format!("Installing {}", kind.name()),
@@ -107,6 +110,7 @@ fn waiting(found: &SetupView, row: AgentRowView) -> SetupView {
     match row.kind {
         AgentKind::Claude => v.claude = row,
         AgentKind::Codex => v.codex = row,
+        AgentKind::OpenCode => v.opencode = row,
     }
     v.show_picker = false;
     v.options_enabled = false;
@@ -188,6 +192,7 @@ pub fn from(claude: &AgentInfo, codex: &AgentInfo, use_claude: bool, use_codex: 
         intro,
         claude: row(claude, cs, any_ready),
         codex: row(codex, xs, any_ready),
+        opencode: AgentRowView::new(AgentKind::OpenCode, AgentRowState::Missing, "Optional."),
         show_picker: cs == Ready && xs == Ready,
         options_enabled: can_open,
         note,
@@ -204,15 +209,52 @@ fn row(a: &AgentInfo, state: AgentRowState, any_ready: bool) -> AgentRowView {
         _ if a.kind == AgentKind::Claude => {
             (if any_ready { "Optional." } else { "Anthropic" }).to_string()
         }
-        _ => match (any_ready, a.npm.is_some()) {
-            (true, false) => "Optional. Node.js not found.",
-            (true, true) => "Optional. Needs Node.js.",
-            (false, false) => "OpenAI · Node.js not found",
-            (false, true) => "OpenAI · needs Node.js",
+        _ => {
+            let maker = if a.kind == AgentKind::Codex { "OpenAI" } else { "SST, open source" };
+            match (any_ready, a.npm.is_some()) {
+                (true, false) => "Optional. Node.js not found.".to_string(),
+                (true, true) => "Optional. Needs Node.js.".to_string(),
+                (false, false) => format!("{maker} · Node.js not found"),
+                (false, true) => format!("{maker} · needs Node.js"),
+            }
         }
-        .to_string(),
     };
     AgentRowView::new(a.kind, state, meta)
+}
+
+/// [`from`] with OpenCode as a third, optional agent: what was said about Claude Code and Codex
+/// stands while OpenCode is missing; a ready OpenCode alone is enough to start.
+pub fn from_all(
+    claude: &AgentInfo,
+    codex: &AgentInfo,
+    opencode: &AgentInfo,
+    uses: [bool; 3],
+) -> SetupView {
+    use AgentRowState::Ready;
+    let [use_claude, use_codex, use_opencode] = uses;
+    let mut v = from(claude, codex, use_claude, use_codex);
+    let (cs, xs, os) = (state_of(claude), state_of(codex), state_of(opencode));
+    let ready = [cs, xs, os].iter().filter(|s| **s == Ready).count();
+    let any_ready = ready > 0;
+    // "Optional." on a missing row once any agent, OpenCode included, works.
+    v.claude = row(claude, cs, any_ready);
+    v.codex = row(codex, xs, any_ready);
+    v.opencode = row(opencode, os, any_ready);
+    v.show_picker = ready >= 2;
+    if os == Ready && use_opencode {
+        v.can_open = true;
+        v.options_enabled = true;
+    }
+    if os == Ready && cs != Ready && xs != Ready {
+        v.title = "Kilno is ready".into();
+        v.intro = "OpenCode is all Kilno needs. Claude Code and Codex are optional.".into();
+        v.note = "Add either any time from Settings.".into();
+    } else if ready == 3 {
+        v.intro = "Found all three agents. Their sessions share one sidebar.".into();
+    } else if !any_ready && cs != AgentRowState::SignIn && xs != AgentRowState::SignIn {
+        v.intro = "Kilno runs your coding agent in its panes. Any one of them works.".into();
+    }
+    v
 }
 
 static VERSION_NUMBER: LazyLock<Regex> =
@@ -246,7 +288,7 @@ pub fn mascot_move(view: &SetupView) -> SetupMove {
     let busy = |s: AgentRowState| matches!(s, AgentRowState::Installing | AgentRowState::SigningIn);
     if view.claude.state == AgentRowState::Looking {
         SetupMove::Peek
-    } else if busy(view.claude.state) || busy(view.codex.state) {
+    } else if busy(view.claude.state) || busy(view.codex.state) || busy(view.opencode.state) {
         SetupMove::Walk
     } else if view.can_open {
         SetupMove::Jump
@@ -277,13 +319,13 @@ pub struct Badge {
 }
 
 pub fn badge(kind: AgentKind, state: AgentRowState) -> Badge {
-    let claude = kind == AgentKind::Claude;
     let lit = matches!(state, AgentRowState::Ready | AgentRowState::SignIn | AgentRowState::SigningIn);
-    let text = if claude { "CC" } else { "CX" };
-    match (lit, claude) {
+    let text = kind.tag();
+    match (lit, kind) {
         (false, _) => Badge { text, bg: 0x1B1F26, border: 0x2F3641, fg: 0x8A929F },
-        (true, true) => Badge { text, bg: 0x2A221F, border: 0x4A3329, fg: 0xE39A7E },
-        (true, false) => Badge { text, bg: 0x1C2530, border: 0x2B3D52, fg: 0x7DBBEB },
+        (true, AgentKind::Claude) => Badge { text, bg: 0x2A221F, border: 0x4A3329, fg: 0xE39A7E },
+        (true, AgentKind::Codex) => Badge { text, bg: 0x1C2530, border: 0x2B3D52, fg: 0x7DBBEB },
+        (true, AgentKind::OpenCode) => Badge { text, bg: 0x1F2622, border: 0x34473B, fg: 0xA6D9B5 },
     }
 }
 
@@ -305,7 +347,7 @@ pub fn row_parts(row: &AgentRowView, found: Option<&AgentInfo>) -> RowParts {
         use_tick: row.state == AgentRowState::Ready,
         sign_in: row.state == AgentRowState::SignIn,
         fix: row.state == AgentRowState::Missing,
-        get_node: row.kind == AgentKind::Codex && found.is_some_and(|f| f.npm.is_none()),
+        get_node: row.kind != AgentKind::Claude && found.is_some_and(|f| f.npm.is_none()),
     }
 }
 
@@ -314,6 +356,7 @@ pub fn install_shown(kind: AgentKind) -> &'static str {
     match kind {
         AgentKind::Claude => "irm https://claude.ai/install.ps1 | iex",
         AgentKind::Codex => "npm install -g @openai/codex",
+        AgentKind::OpenCode => "npm install -g opencode-ai",
     }
 }
 
@@ -336,6 +379,7 @@ pub fn locate_failed(kind: AgentKind) -> String {
     let file = match kind {
         AgentKind::Claude => "claude.exe",
         AgentKind::Codex => "codex.cmd",
+        AgentKind::OpenCode => "opencode.cmd",
     };
     format!("That program didn't run. Pick {}'s {file}.", kind.name())
 }
@@ -376,7 +420,8 @@ pub fn needs_setup(
 ) -> bool {
     !settings.setup_done
         || !(settings.use_claude && locate(AgentKind::Claude, settings.claude_path.as_deref()).is_some()
-            || settings.use_codex && locate(AgentKind::Codex, settings.codex_path.as_deref()).is_some())
+            || settings.use_codex && locate(AgentKind::Codex, settings.codex_path.as_deref()).is_some()
+            || settings.use_opencode && locate(AgentKind::OpenCode, settings.opencode_path.as_deref()).is_some())
 }
 
 /// What Open Kilno hands back: the settings with the choices made here.

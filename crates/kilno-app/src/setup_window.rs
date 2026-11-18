@@ -27,7 +27,7 @@ use egui::{
 use crate::theme::*;
 
 pub const TITLE: &str = "Kilno setup";
-pub const SIZE: Vec2 = Vec2::new(760.0, 524.0);
+pub const SIZE: Vec2 = Vec2::new(760.0, 630.0);
 
 const HEAD: Color32 = MENU_HOVER_FG; // #E6E9EE
 const CLAY_TEXT: Color32 = Color32::from_rgb(0xE3, 0x9A, 0x7E);
@@ -63,7 +63,7 @@ pub fn builder(over: Option<Rect>) -> ViewportBuilder {
 }
 
 enum Msg {
-    Found(u64, Box<[AgentInfo; 2]>),
+    Found(u64, Box<[AgentInfo; 3]>),
     HelperDone,
     Located { kind: AgentKind, file: String, ran: bool },
 }
@@ -90,12 +90,13 @@ pub struct SetupWindow {
     settings: KilnoSettings,
     use_claude: bool,
     use_codex: bool,
+    use_opencode: bool,
     pick: NewSessionAgent,
     login_on: bool,
     login_can: bool,
     path_on: bool,
     path_can: bool,
-    found: Option<[AgentInfo; 2]>,
+    found: Option<[AgentInfo; 3]>,
     view: SetupView,
     /// Locate…'s complaint, until the view next changes.
     note: Option<String>,
@@ -145,6 +146,7 @@ impl SetupWindow {
             settings: settings.clone(),
             use_claude: settings.use_claude,
             use_codex: settings.use_codex,
+            use_opencode: settings.use_opencode,
             pick: settings.default_agent,
             login_on,
             login_can: startup.can_write(),
@@ -181,17 +183,18 @@ impl SetupWindow {
         self.view = setup::checking();
         self.note = None;
         let (run, tx, ctx) = (self.run, self.tx.clone(), self.ctx.clone());
-        let (claude, codex) = (self.settings.claude_path.clone(), self.settings.codex_path.clone());
+        let (claude, codex, opencode) =
+            (self.settings.claude_path.clone(), self.settings.codex_path.clone(), self.settings.opencode_path.clone());
         let _ = std::thread::Builder::new().name("kilno-detect".into()).spawn(move || {
-            let found = AgentDetector::for_this_machine().detect_both(claude.as_deref(), codex.as_deref());
+            let found = AgentDetector::for_this_machine().detect_all([claude.as_deref(), codex.as_deref(), opencode.as_deref()]);
             let _ = tx.send(Msg::Found(run, Box::new(found)));
             ctx.request_repaint_of(viewport_id());
         });
     }
 
     fn show_found(&mut self) {
-        if let Some([claude, codex]) = &self.found {
-            self.view = setup::from(claude, codex, self.use_claude, self.use_codex);
+        if let Some([claude, codex, opencode]) = &self.found {
+            self.view = setup::from_all(claude, codex, opencode, [self.use_claude, self.use_codex, self.use_opencode]);
             self.note = None;
         }
     }
@@ -217,6 +220,7 @@ impl SetupWindow {
                     match kind {
                         AgentKind::Claude => self.settings.claude_path = Some(file),
                         AgentKind::Codex => self.settings.codex_path = Some(file),
+                        AgentKind::OpenCode => self.settings.opencode_path = Some(file),
                     }
                     self.detect();
                 }
@@ -281,12 +285,16 @@ impl SetupWindow {
         if self.busy {
             return;
         }
-        let Some([claude, codex]) = &self.found else { return };
-        let agent = if kind == AgentKind::Claude { claude } else { codex };
+        let Some([claude, codex, opencode]) = &self.found else { return };
+        let agent = match kind {
+            AgentKind::Claude => claude,
+            AgentKind::Codex => codex,
+            AgentKind::OpenCode => opencode,
+        };
         let command = if install { helper::install_command(agent) } else { helper::sign_in_command(agent) };
         let Some(command) = command else { return };
         self.busy = true;
-        let found = setup::from(claude, codex, self.use_claude, self.use_codex);
+        let found = setup::from_all(claude, codex, opencode, [self.use_claude, self.use_codex, self.use_opencode]);
         self.view = if install { setup::installing(&found, kind) } else { setup::signing_in(&found, kind) };
         self.note = None;
         let (tx, ctx) = (self.tx.clone(), self.ctx.clone());
@@ -322,8 +330,13 @@ impl SetupWindow {
         if !self.view.can_open {
             return;
         }
-        let claude = self.found.as_ref().map(|[c, _]| c);
-        let agent = setup::default_agent_on_open(self.view.show_picker, self.pick, claude, self.use_claude);
+        let claude = self.found.as_ref().map(|[c, _, _]| c);
+        let mut agent = setup::default_agent_on_open(self.view.show_picker, self.pick, claude, self.use_claude);
+        // Only OpenCode there to start with: it is the one, not a Codex that is not installed.
+        let ready = |k: AgentKind| self.found.as_ref().is_some_and(|f| f.iter().any(|a| a.kind == k && setup::state_of(a) == setup::AgentRowState::Ready));
+        if !self.view.show_picker && agent == NewSessionAgent::Codex && !(ready(AgentKind::Codex) && self.use_codex) && ready(AgentKind::OpenCode) && self.use_opencode {
+            agent = NewSessionAgent::OpenCode;
+        }
         let path = UserPath::for_this_user();
         if path.can_write() {
             if let Some(folder) = user_path::kilno_folder() {
@@ -335,7 +348,7 @@ impl SetupWindow {
                 let _ = folder;
             }
         }
-        let s = setup::done_settings(&self.settings, self.use_claude, self.use_codex, agent);
+        let s = KilnoSettings { use_opencode: self.use_opencode, ..setup::done_settings(&self.settings, self.use_claude, self.use_codex, agent) };
         self.outcome = Some(Outcome::Done(Box::new(s)));
     }
 
@@ -363,11 +376,15 @@ impl SetupWindow {
         // The agents.
         let card_top = top + header_h + 20.0;
         let found = self.found.clone();
-        let c_info = found.as_ref().map(|[c, _]| c);
-        let x_info = found.as_ref().map(|[_, x]| x);
-        let rows = [(self.view.claude.clone(), c_info), (self.view.codex.clone(), x_info)];
+        let info = |i: usize| found.as_ref().map(|f| &f[i]);
+        let rows = [
+            (self.view.claude.clone(), info(0)),
+            (self.view.codex.clone(), info(1)),
+            (self.view.opencode.clone(), info(2)),
+        ];
         let heights: Vec<f32> = rows.iter().map(|(r, f)| row_height(r, *f)).collect();
-        let card = Rect::from_min_size(Pos2::new(inner.left(), card_top), Vec2::new(inner.width(), heights[0] + 1.0 + heights[1]));
+        let card_h = heights.iter().sum::<f32>() + (rows.len() - 1) as f32;
+        let card = Rect::from_min_size(Pos2::new(inner.left(), card_top), Vec2::new(inner.width(), card_h));
         ui.painter().rect_filled(card, 10, SURFACE_BG);
         ui.painter().rect_stroke(card, 10, Stroke::new(1.0, HAIRLINE), StrokeKind::Inside);
         let mut y = card.top();
@@ -375,7 +392,7 @@ impl SetupWindow {
             let r = Rect::from_min_size(Pos2::new(card.left(), y), Vec2::new(card.width(), heights[i]));
             self.draw_row(ui, r, row, *info, actions);
             y += heights[i];
-            if i == 0 {
+            if i + 1 < rows.len() {
                 ui.painter().hline(card.x_range().shrink(1.0), y + 0.5, Stroke::new(1.0, HAIRLINE));
                 y += 1.0;
             }
@@ -488,13 +505,18 @@ impl SetupWindow {
         // Right side, right to left: Use, Sign in, the pill.
         let mut x = right;
         if parts.use_tick {
-            let mut on = if kind == AgentKind::Claude { self.use_claude } else { self.use_codex };
+            let mut on = match kind {
+                AgentKind::Claude => self.use_claude,
+                AgentKind::Codex => self.use_codex,
+                AgentKind::OpenCode => self.use_opencode,
+            };
             let w = 16.0 + 10.0 + text_w(ui, "Use", ui_font(13.0));
             let rect = Rect::from_min_size(Pos2::new(x - w, cy - 10.0), Vec2::new(w, 20.0));
             if small_tick(ui, rect, kind, &mut on, "Use") {
                 match kind {
                     AgentKind::Claude => self.use_claude = on,
                     AgentKind::Codex => self.use_codex = on,
+                    AgentKind::OpenCode => self.use_opencode = on,
                 }
                 if !self.busy {
                     self.show_found();
@@ -505,8 +527,8 @@ impl SetupWindow {
         if parts.sign_in {
             let w = text_w(ui, "Sign in", semibold(12.0)) + 24.0;
             let rect = Rect::from_min_size(Pos2::new(x - w, cy - 15.0), Vec2::new(w, 30.0));
-            let id = if kind == AgentKind::Claude { "signin-claude" } else { "signin-codex" };
-            if filled_button(ui, rect, id, "Sign in") {
+            let id = format!("signin-{}", kind.tag());
+            if filled_button(ui, rect, &id, "Sign in") {
                 actions.push(Action::SignIn(kind));
             }
             x = rect.left() - 12.0;
@@ -537,23 +559,23 @@ impl SetupWindow {
             let mut x = line.right();
             let lw = text_w(ui, "Locate…", ui_font(12.0));
             let lr = Rect::from_min_size(Pos2::new(x - lw, line.top()), Vec2::new(lw, 30.0));
-            let lid = if kind == AgentKind::Claude { "locate-claude" } else { "locate-codex" };
-            if link(ui, lr, lid, "Locate…") {
+            let lid = format!("locate-{}", kind.tag());
+            if link(ui, lr, &lid, "Locate…") {
                 actions.push(Action::Locate(kind));
             }
             x = lr.left() - 10.0;
             if parts.get_node {
                 let gw = text_w(ui, "Get Node.js first", ui_font(12.0));
                 let gr = Rect::from_min_size(Pos2::new(x - gw, line.top()), Vec2::new(gw, 30.0));
-                if link(ui, gr, "get-node", "Get Node.js first") {
+                if link(ui, gr, &format!("get-node-{}", kind.tag()), "Get Node.js first") {
                     crate::win::shell::open(setup::NODE_URL);
                 }
                 x = gr.left() - 10.0;
             } else {
                 let iw = text_w(ui, "Install", semibold(12.0)) + 24.0;
                 let ir = Rect::from_min_size(Pos2::new(x - iw, line.top()), Vec2::new(iw, 30.0));
-                let iid = if kind == AgentKind::Claude { "install-claude" } else { "install-codex" };
-                if outline_button(ui, ir, iid, "Install", semibold(12.0), CLAY_TEXT, CLAY, None, true) {
+                let iid = format!("install-{}", kind.tag());
+                if outline_button(ui, ir, &iid, "Install", semibold(12.0), CLAY_TEXT, CLAY, None, true) {
                     actions.push(Action::Install(kind));
                 }
                 x = ir.left() - 10.0;
@@ -567,13 +589,18 @@ impl SetupWindow {
         }
     }
 
-    /// "New sessions use" and its three choices.
+    /// "New sessions use" and its choices.
     fn draw_picker(&mut self, ui: &mut Ui, at: Pos2, enabled: bool) {
         let label_fg = if enabled { HEAD } else { DISABLED_FG };
         let label = ui.painter().layout_no_wrap("New sessions use".into(), ui_font(14.0), label_fg);
         let lw = label.size().x;
         ui.painter().galley(Pos2::new(at.x, at.y + 17.0 - label.size().y / 2.0), label, label_fg);
-        let choices = [(NewSessionAgent::Claude, "Claude Code"), (NewSessionAgent::Codex, "Codex"), (NewSessionAgent::Ask, "Ask each time")];
+        let choices = [
+            (NewSessionAgent::Claude, "Claude Code"),
+            (NewSessionAgent::Codex, "Codex"),
+            (NewSessionAgent::OpenCode, "OpenCode"),
+            (NewSessionAgent::Ask, "Ask each time"),
+        ];
         let widths: Vec<f32> = choices.iter().map(|(_, t)| text_w(ui, t, semibold(12.0)) + 24.0).collect();
         let bx = at.x + lw + 12.0;
         let boxr = Rect::from_min_size(Pos2::new(bx, at.y), Vec2::new(widths.iter().sum::<f32>() + 6.0, 34.0));

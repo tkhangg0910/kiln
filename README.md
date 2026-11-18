@@ -5,7 +5,7 @@
 <h1 align="center">Kilno</h1>
 
 <p align="center"><b>Never miss an agent waiting on you.</b><br>
-Every Claude Code and Codex session in one Windows window, plus the <i>island</i>: a small bar at
+Every Claude Code, Codex and OpenCode session in one Windows window, plus the <i>island</i>: a small bar at
 the top of the screen that tells you when a session asks for a permission or a decision, or is done.</p>
 
 <p align="center">
@@ -26,7 +26,7 @@ the top of the screen that tells you when a session asks for a permission or a d
 | | |
 |---|---|
 | <img src="docs/assets/island.png" width="420" alt="The island announcing a session that needs you"> | **Know who is waiting.** The island at the top of the screen lights up when a session asks you something or finishes, even while you work in another app. |
-| <img src="docs/assets/sessions.png" width="420" alt="Sessions grouped by project in the sidebar"> | **One window, every session.** Claude Code and Codex sessions from all your projects, grouped in one sidebar; start, resume or branch any of them. |
+| <img src="docs/assets/sessions.png" width="420" alt="Sessions grouped by project in the sidebar"> | **One window, every session.** Claude Code, Codex and OpenCode sessions from all your projects, grouped in one sidebar; start, resume or branch any of them. |
 | <img src="docs/assets/status.png" width="420" alt="Model, branch, context and usage limits in the pane header"> | **Limits in view.** Model, branch, context use and your 5-hour and 7-day limits sit in the pane header, so a session never stalls on a surprise. |
 | <img src="docs/assets/picker.png" width="420" alt="The island offering a new screenshot to a session"> | **Screenshots straight to the prompt.** Take a screenshot with Ctrl+Alt+S or any tool, and the island hands it to the session you pick. |
 
@@ -52,7 +52,7 @@ forked from; method and raw numbers in [`BENCH.md`](BENCH.md).
 ## Quick start
 
 Needs Windows 10 or 11 (64-bit) and [Claude Code](https://docs.claude.com/en/docs/claude-code)
-and/or [Codex](https://github.com/openai/codex). In PowerShell:
+and/or [Codex](https://github.com/openai/codex) and/or [OpenCode](https://opencode.ai). In PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/tkhangg0910/kilno/main/scripts/install.ps1 | iex
@@ -87,7 +87,7 @@ window finds your agents. Run the same line again to update. You can read
 | [Configuration](docs/configuration.md) | Settings pages, `settings.json` keys, environment variables |
 | [FAQ](docs/faq.md) | Privacy, accounts, running next to Clayo |
 | [Troubleshooting](docs/troubleshooting.md) | Shortcut conflicts, missing agents or sessions, crash logs |
-| [Claude Code and Codex](docs/AGENTS.md) | What works with each agent |
+| [Claude Code, Codex and OpenCode](docs/AGENTS.md) | What works with each agent |
 | [Testing](docs/testing.md) | How to run the tests and what they cover |
 
 ## Contributing

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Windows 10 or 11, 64-bit.
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex) (see [AGENTS.md](AGENTS.md); Kilno's setup window can install or locate them).
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) and/or [Codex](https://github.com/openai/codex) and/or [OpenCode](https://opencode.ai) (see [AGENTS.md](AGENTS.md); Kilno's setup window can install or locate them).
 - `git` on PATH (used at run time for the branch/diff in the pane header).
 - To build from source: Rust stable 1.85+ with the MSVC toolchain and the Visual Studio C++ build tools.
 
@@ -47,4 +47,4 @@ Push a `v*` tag on `main`. `.github/workflows/release.yml` checks that the tag i
 
 ## Verify it works
 
-The first launch opens the setup window, which looks for Claude Code and Codex. After that the main window shows a sidebar of your sessions and the island appears at the top of the screen.
+The first launch opens the setup window, which looks for Claude Code, Codex and OpenCode. After that the main window shows a sidebar of your sessions and the island appears at the top of the screen.

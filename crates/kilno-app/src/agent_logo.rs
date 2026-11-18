@@ -1,5 +1,5 @@
 //! The agents' marks where "CC" / "CX" used to be: Claude's spark for Claude Code, OpenAI's
-//! mark for Codex. White-on-transparent PNGs (rendered at 128 px from Simple Icons' SVGs, see
+//! mark for Codex, and a plain drawn mark (a square with a cursor) for OpenCode. White-on-transparent PNGs (rendered at 128 px from Simple Icons' SVGs, see
 //! res/agents/README.md), tinted with the agent's colour where they are drawn.
 
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureFilter, TextureHandle, TextureOptions};
@@ -9,20 +9,32 @@ use std::sync::OnceLock;
 const CLAUDE: &[u8] = include_bytes!("../res/agents/claude.png");
 const CODEX: &[u8] = include_bytes!("../res/agents/codex.png");
 
-/// The agent a "CC" / "CX" tag ([`AgentKind::tag`]) names.
+/// The agent a "CC" / "CX" / "OC" tag ([`AgentKind::tag`]) names.
 pub fn kind_of(tag: &str) -> AgentKind {
-    if tag == AgentKind::Codex.tag() {
-        AgentKind::Codex
-    } else {
-        AgentKind::Claude
-    }
+    [AgentKind::Codex, AgentKind::OpenCode].into_iter().find(|k| k.tag() == tag).unwrap_or(AgentKind::Claude)
 }
 
 /// `kind`'s mark filling `rect` (square), in `tint`.
 pub fn paint(p: &Painter, rect: Rect, kind: AgentKind, tint: Color32) {
+    if kind == AgentKind::OpenCode {
+        return paint_opencode(p, rect, tint);
+    }
     let [claude, codex] = textures(p.ctx());
     let tex = if kind == AgentKind::Codex { codex } else { claude };
     p.image(tex.id(), rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), tint);
+}
+
+/// OpenCode's mark: an outlined square (a terminal) with a block cursor at its lower left.
+fn paint_opencode(p: &Painter, rect: Rect, tint: Color32) {
+    let s = rect.width().min(rect.height());
+    let frame = Rect::from_center_size(rect.center(), egui::Vec2::splat(s * 0.82));
+    let w = (s * 0.11).max(1.0);
+    p.rect_stroke(frame, s * 0.12, egui::Stroke::new(w, tint), egui::StrokeKind::Inside);
+    let cursor = Rect::from_min_size(
+        Pos2::new(frame.left() + s * 0.2, frame.bottom() - s * 0.42),
+        egui::Vec2::new(s * 0.22, s * 0.2),
+    );
+    p.rect_filled(cursor, s * 0.03, tint);
 }
 
 fn textures(ctx: &Context) -> &'static [TextureHandle; 2] {
@@ -50,5 +62,6 @@ mod tests {
         }
         assert_eq!(kind_of("CX"), AgentKind::Codex);
         assert_eq!(kind_of("CC"), AgentKind::Claude);
+        assert_eq!(kind_of("OC"), AgentKind::OpenCode);
     }
 }
