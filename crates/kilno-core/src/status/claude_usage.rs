@@ -206,9 +206,9 @@ mod tests {
 
     #[test]
     fn the_file_sits_next_to_the_claude_folder_or_in_the_config_dir() {
-        let home = MapEnv::default().with("USERPROFILE", r"C:\Users\me");
-        assert_eq!(path(&home), PathBuf::from(r"C:\Users\me\.claude.json"));
+        let home = MapEnv::default().with("USERPROFILE", r"C:\Users\me").with("HOME", r"C:\Users\me");
+        assert_eq!(path(&home), PathBuf::from(r"C:\Users\me").join(".claude.json"));
         let cfg = home.with("CLAUDE_CONFIG_DIR", r"D:\cc");
-        assert_eq!(path(&cfg), PathBuf::from(r"D:\cc\.claude.json"));
+        assert_eq!(path(&cfg), PathBuf::from(r"D:\cc").join(".claude.json"));
     }
 }

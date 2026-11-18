@@ -72,6 +72,8 @@ mod tests {
         assert!(!a.background);
     }
 
+    // Windows paths compare case-insensitively and with `\`; these two lean on that.
+    #[cfg(windows)]
     #[test]
     fn cwd_unless_exe_folder_or_system32() {
         assert_eq!(run(&[], r"C:\proj").folder.as_deref(), Some(r"C:\proj"));
@@ -80,6 +82,7 @@ mod tests {
         assert_eq!(run(&["nope"], r"C:\Windows\System32").folder, None);
     }
 
+    #[cfg(windows)]
     #[test]
     fn handoff_is_the_folder_or_empty_and_nothing_from_login() {
         assert_eq!(run(&[], r"C:\proj").handoff().as_deref(), Some(r"C:\proj"));

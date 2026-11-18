@@ -112,10 +112,10 @@ mod tests {
 
     #[test]
     fn path_follows_claude_config_dir() {
-        let e = MapEnv::default().with("USERPROFILE", r"C:\Users\x");
-        assert_eq!(credentials_path(&e), PathBuf::from(r"C:\Users\x\.claude\.credentials.json"));
+        let e = MapEnv::default().with("USERPROFILE", r"C:\Users\x").with("HOME", r"C:\Users\x");
+        assert_eq!(credentials_path(&e), PathBuf::from(r"C:\Users\x").join(".claude").join(".credentials.json"));
         let e = e.with("CLAUDE_CONFIG_DIR", r"D:\cc");
-        assert_eq!(credentials_path(&e), PathBuf::from(r"D:\cc\.credentials.json"));
+        assert_eq!(credentials_path(&e), PathBuf::from(r"D:\cc").join(".credentials.json"));
     }
 
     #[test]
