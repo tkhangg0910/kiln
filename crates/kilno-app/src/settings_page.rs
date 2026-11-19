@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use kilno_core::paths::{claude_dir, codex_home, DataDir, OsEnv};
 use kilno_core::security::ask_rules::{self, AskGroup, GROUPS};
 use kilno_core::security::own_rules::{self, OwnRule, OwnRules};
-use kilno_core::settings::{KilnoSettings, StatusTheme, LIVE_USAGE_STEPS, RESERVE_STEPS};
+use kilno_core::settings::{KilnoSettings, StatusTheme, BACKGROUND_STEPS, LIVE_USAGE_STEPS, RESERVE_STEPS};
 use kilno_core::settings_view as view;
 use kilno_core::system::login_startup::LoginStartup;
 use kilno_core::system::updater::{self, Version};
@@ -243,6 +243,41 @@ impl SettingsPage {
                 )
                 .sep(),
         );
+        card_end(ui, card);
+
+        group_label(ui, "Background", 22.0);
+        let card = card_begin(ui);
+        let mut spec = Row::new(Lead::Icon('\u{E91B}'), "Background image", Right::Button("Choose…")).corners(true, false);
+        spec = match &s.background_image {
+            Some(p) => spec.line_owned(p.clone(), MUTED_AA).link("Remove"),
+            None => spec.line("A picture drawn faintly over the whole window, like VS Code's background.", MUTED_AA),
+        };
+        let r = row(ui, Id::NULL.with("background"), spec);
+        if r.button {
+            let pick = rfd::FileDialog::new()
+                .set_title("Background image")
+                .add_filter("Images", &["png", "jpg", "jpeg", "webp", "gif", "bmp"])
+                .pick_file();
+            if let Some(file) = pick {
+                s.background_image = Some(file.to_string_lossy().into_owned());
+            }
+        }
+        if r.link == Some(0) {
+            s.background_image = None;
+        }
+        let steps: Vec<String> = BACKGROUND_STEPS.iter().map(|n| format!("{n}%")).collect();
+        let chosen = BACKGROUND_STEPS.iter().position(|n| *n == s.background_opacity).unwrap_or(0);
+        let r = row(
+            ui,
+            Id::NULL.with("background-opacity"),
+            Row::new(Lead::Icon('\u{E706}'), "Strength", Right::Segments { labels: &steps, chosen })
+                .line("How strongly the picture shows through.", MUTED_AA)
+                .sep()
+                .corners(false, true),
+        );
+        if let Some(i) = r.segment {
+            s.background_opacity = BACKGROUND_STEPS[i];
+        }
         card_end(ui, card);
 
         group_label(ui, "Updates", 22.0);

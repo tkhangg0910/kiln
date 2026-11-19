@@ -326,6 +326,7 @@ pub struct KilnoApp {
     page_flash: Option<(u64, std::time::Instant)>,
     /// The Settings page's own state (which page, open cards, own rules read).
     settings_page: crate::settings_page::SettingsPage,
+    background: crate::background::Background,
     /// The image chip's thumbnails and full-size view.
     image_chip: ImageChip,
     /// The grid the terminal area fits, as last drawn: a new pane starts its console at it, as
@@ -452,6 +453,7 @@ impl KilnoApp {
         let mut app = Self {
             settings,
             settings_page: crate::settings_page::SettingsPage::new(data.clone()),
+            background: Default::default(),
             data,
             model,
             jobs,
@@ -2266,6 +2268,7 @@ impl eframe::App for KilnoApp {
         ui.painter().rect_filled(split, 0, Color32::TRANSPARENT);
         self.splitter(ui, split, full.width());
         ui.scope_builder(UiBuilder::new().max_rect(term), |ui| self.draw_terminal_side(ui));
+        self.background.paint(&ctx, full, self.settings.background_image.as_deref(), self.settings.background_opacity);
         self.update_confirm(&ctx);
         self.link_confirm(&ctx);
         self.run_actions(&ctx, frame);

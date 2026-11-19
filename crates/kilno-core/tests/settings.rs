@@ -371,3 +371,20 @@ fn live_usage_round_trip() {
         serde_json::from_str(r#"{"liveUsage":true,"liveUsageMinutes":3}"#).unwrap();
     assert_eq!(KilnoSettings::from_map(&odd).live_usage_minutes, 2, "an interval not offered falls back");
 }
+
+/// The background picture: written only when set, a strength not offered falls back.
+#[test]
+fn background_round_trip() {
+    let d = KilnoSettings::default();
+    assert_eq!((d.background_image.as_deref(), d.background_opacity), (None, 15));
+    assert!(!d.to_json().contains("background"), "defaults are not written");
+
+    let on = KilnoSettings { background_image: Some(r"C:\pics\cat.png".into()), background_opacity: 30, ..d.clone() };
+    let root: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&on.to_json()).unwrap();
+    assert_eq!(KilnoSettings::from_map(&root), on, "round trip");
+
+    let odd: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(r#"{"backgroundImage":"","backgroundOpacity":99}"#).unwrap();
+    let odd = KilnoSettings::from_map(&odd);
+    assert_eq!((odd.background_image, odd.background_opacity), (None, 15));
+}
