@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use kilno_core::paths::{claude_dir, codex_home, DataDir, OsEnv};
 use kilno_core::security::ask_rules::{self, AskGroup, GROUPS};
 use kilno_core::security::own_rules::{self, OwnRule, OwnRules};
-use kilno_core::settings::{KilnoSettings, StatusTheme, BACKGROUND_STEPS, LIVE_USAGE_STEPS, RESERVE_STEPS, TITLE_BACKDROPS};
+use kilno_core::settings::{KilnoSettings, StatusTheme, BACKGROUND_STEPS, LIVE_USAGE_STEPS, RESERVE_STEPS, RESOURCE_MODES, TITLE_BACKDROPS};
 use kilno_core::settings_view as view;
 use kilno_core::system::login_startup::LoginStartup;
 use kilno_core::system::updater::{self, Version};
@@ -293,7 +293,7 @@ impl SettingsPage {
                 ui,
                 Id::NULL.with("title-color"),
                 Row::new(Lead::Icon('\u{E790}'), "Colour", Right::Segments { labels: &colors, chosen })
-                    .line("Picture takes the background image's colour. Windows 11.", MUTED_AA)
+                    .line("Picture takes the background image's most striking colour. Windows 11.", MUTED_AA)
                     .corners(true, false),
             );
             if let Some(i) = r.segment.filter(|i| *i < PRESETS.len()) {
@@ -545,6 +545,21 @@ fn status_page(ui: &mut Ui, s: &mut KilnoSettings) {
     );
     if let Some(i) = r.segment {
         s.theme = StatusTheme::ALL[i];
+    }
+    let modes = ["Off", "Kilno", "Kilno + sessions"].map(String::from);
+    let chosen = RESOURCE_MODES.iter().position(|m| *m == s.resource_usage).unwrap_or(0);
+    let r = row(
+        ui,
+        Id::NULL.with("resource-usage"),
+        Row::new(Lead::Icon('\u{E9D2}'), "RAM and CPU", Right::Segments { labels: &modes, chosen })
+            .line(
+                "In the sidebar footer, every 2 s while the window shows. Kilno + sessions adds each session's shell and agent; hover for each.",
+                MUTED_AA,
+            )
+            .sep(),
+    );
+    if let Some(i) = r.segment {
+        s.resource_usage = RESOURCE_MODES[i].to_string();
     }
     card_end(ui, card);
 

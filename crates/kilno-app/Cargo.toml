@@ -27,6 +27,7 @@ egui_commonmark = { version = "0.26", default-features = false, features = ["pul
 # Pasted-image thumbnails and the doc viewer's images: these formats only.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 egui_extras = { version = "0.37", default-features = false, features = ["file", "image"] }
+sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # The X11 and Wayland back ends (winit loads their libraries at run time), and Vulkan / GL for

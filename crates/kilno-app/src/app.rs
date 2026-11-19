@@ -51,6 +51,8 @@ const SIDEBAR_W: f32 = 310.0;
 const SIDEBAR_MIN: f32 = 240.0;
 const SIDEBAR_MAX: f32 = 520.0;
 const SPLITTER_W: f32 = 7.0;
+/// The RAM and CPU line in the sidebar footer.
+const USAGE_H: f32 = 16.0;
 const TERMINAL_MIN: f32 = 360.0;
 const HEADER_H: f32 = 42.0;
 const ROW_H: f32 = 48.0;
@@ -332,6 +334,9 @@ pub struct KilnoApp {
     title_bar: crate::title_bar::TitleBar,
     /// KILNO_DEV_FILES was applied (debug builds).
     dev_files_done: bool,
+    usage: crate::usage::Sampler,
+    /// This frame's RAM and CPU, read once so the footer's height and drawing agree.
+    usage_now: Option<crate::usage::Usage>,
     /// The main window (0 off Windows), for its caption colours.
     hwnd: isize,
     /// The image chip's thumbnails and full-size view.
@@ -465,6 +470,8 @@ impl KilnoApp {
             background: Default::default(),
             title_bar: Default::default(),
             dev_files_done: false,
+            usage: crate::usage::Sampler::start(cc.egui_ctx.clone()),
+            usage_now: None,
             hwnd,
             data,
             model,
@@ -1271,7 +1278,9 @@ impl KilnoApp {
         let limits_h = status_view::limits_height(ui, &self.status_frame.meters, self.settings.theme);
         let limits_gap = if limits_h > 0.0 { limits_h + 12.0 } else { 0.0 };
         let update_gap = if self.update.button().is_some() { 30.0 + 12.0 } else { 0.0 };
-        let footer_h = 12.0 + limits_gap + update_gap + 30.0 + 14.0;
+        self.usage_now = self.usage.get();
+        let usage_gap = if self.usage_now.is_some() { USAGE_H + 12.0 } else { 0.0 };
+        let footer_h = 12.0 + limits_gap + usage_gap + update_gap + 30.0 + 14.0;
         let body = Rect::from_min_max(rect.min, Pos2::new(rect.right(), rect.bottom() - footer_h - 1.0));
         let footer = Rect::from_min_max(Pos2::new(rect.left(), body.bottom()), rect.max);
         ui.scope_builder(UiBuilder::new().max_rect(body), |ui| self.draw_sidebar_body(ui));
@@ -1627,6 +1636,11 @@ impl KilnoApp {
                 self.status.refresh();
             }
             top += limits_h + 12.0;
+        }
+        if let Some(u) = &self.usage_now {
+            let r = Rect::from_min_max(Pos2::new(rect.left() + 14.0, top), Pos2::new(rect.right() - 14.0, top + USAGE_H));
+            usage_line(ui, r, u, self.settings.resource_usage == "all");
+            top += USAGE_H + 12.0;
         }
         if let Some((text, tip)) = self.update.button() {
             let r = Rect::from_min_max(Pos2::new(rect.left() + 14.0, top), Pos2::new(rect.right() - 14.0, top + 30.0));
@@ -2134,6 +2148,27 @@ impl KilnoApp {
     }
 }
 
+/// "RAM · CPU   182 MB · 3%"; hovering lists Kilno and each session.
+fn usage_line(ui: &mut Ui, r: Rect, u: &crate::usage::Usage, with_sessions: bool) {
+    let p = ui.painter();
+    let label = if with_sessions { "RAM · CPU (Kilno + sessions)" } else { "RAM · CPU (Kilno)" };
+    p.text(Pos2::new(r.left(), r.center().y), Align2::LEFT_CENTER, label, ui_font(11.5), MUTED_AA);
+    p.text(Pos2::new(r.right(), r.center().y), Align2::RIGHT_CENTER, crate::usage::line(&u.total), ui_font(11.5), TEXT_PRIMARY);
+    let resp = ui.interact(r, Id::NULL.with("usage-line"), egui::Sense::hover());
+    resp.on_hover_ui(|ui| {
+        egui::Grid::new("usage-parts").num_columns(2).spacing(Vec2::new(18.0, 4.0)).show(ui, |ui| {
+            for part in &u.parts {
+                ui.label(&part.label);
+                ui.label(crate::usage::line(part));
+                ui.end_row();
+            }
+        });
+        if !with_sessions {
+            ui.label(egui::RichText::new("Settings › Status bar can count the sessions too.").color(MUTED_AA).size(11.0));
+        }
+    });
+}
+
 /// The main window's handle, for the island's "Kilno is in front".
 fn main_hwnd(cc: &eframe::CreationContext<'_>) -> isize {
     #[cfg(windows)]
@@ -2277,6 +2312,14 @@ impl eframe::App for KilnoApp {
             Popup::close_all(ctx);
         }
         self.set_visibility();
+        // RAM and CPU: measured only while the window shows and the option is on.
+        let mode = self.settings.resource_usage.as_str();
+        let sessions = if mode == "all" {
+            self.panes.iter().filter_map(|p| Some((self.pane_name(p), p.shared.pid()?))).collect()
+        } else {
+            Vec::new()
+        };
+        self.usage.set(self.shown && mode != "off", sessions);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
@@ -2329,7 +2372,7 @@ impl eframe::App for KilnoApp {
         let split = Rect::from_min_size(Pos2::new(side.right(), full.top()), Vec2::new(SPLITTER_W, full.height()));
         let term = Rect::from_min_max(Pos2::new(split.right(), full.top()), full.max);
         self.background.paint(ui, full, self.settings.background_image.as_deref(), self.settings.background_opacity);
-        let look = crate::title_bar::look(&self.settings, self.background.average);
+        let look = crate::title_bar::look(&self.settings, self.background.accent);
         let session = if self.settings_open { None } else { self.active_pane().map(|p| self.pane_name(p)) };
         let title = crate::title_bar::title(&self.settings, session.as_deref());
         self.title_bar.apply(&ctx, self.hwnd, look, title);

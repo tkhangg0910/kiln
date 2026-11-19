@@ -31,9 +31,10 @@ Everything is set from **Settings** (gear button, bottom-left of the sidebar). K
 | `claudePath`, `codexPath`, `openCodePath` | unset | Use this agent binary instead of the one on PATH |
 | `backgroundImage` | unset | A picture behind the whole window (cropped to fill it); written only when set |
 | `backgroundOpacity` | `20` | How strongly it shows through the panels, in percent: 10, 20, 30, 40 or 50; written only when not 20 |
-| `titleBarColor` | unset | The title bar's colour (Windows 11): `picture` (the background image's average) or `#rrggbb`; unset keeps it dark |
+| `titleBarColor` | unset | The title bar's colour (Windows 11): `picture` (the background image's most striking colour, darkened) or `#rrggbb`; unset keeps it dark |
 | `titleBarBackdrop` | `acrylic` | The dark title bar's backdrop: `acrylic`, `mica`, `tabbed` or `none` |
 | `titleShowsSession` | `false` | The window title (taskbar, Alt+Tab) names the session shown; written only when `true` |
+| `resourceUsage` | `off` | RAM and CPU in the sidebar footer: `kilno` (Kilno alone) or `all` (Kilno and each session's shell, agent and what they run); written only when on |
 | `screenshotHotkey` | `true` | Own Ctrl+Alt+S |
 | `screenshotOffer` | `false` | Offer each new screenshot from the island |
 | `updateCheck` | `true` | Check GitHub releases of `tkhangg0910/kilno` |

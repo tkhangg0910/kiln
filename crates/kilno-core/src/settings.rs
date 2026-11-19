@@ -102,6 +102,9 @@ pub struct KilnoSettings {
     pub title_backdrop: String,
     /// The window title (taskbar, Alt+Tab) names the session shown.
     pub title_session: bool,
+    /// RAM and CPU in the sidebar footer: one of RESOURCE_MODES ("off", Kilno alone, or Kilno and
+    /// the sessions it runs).
+    pub resource_usage: String,
     pub screenshot_hotkey: bool,
     pub screenshot_offer: bool,
     pub update_check: bool,
@@ -145,6 +148,7 @@ impl Default for KilnoSettings {
             title_color: String::new(),
             title_backdrop: "acrylic".into(),
             title_session: false,
+            resource_usage: "off".into(),
             screenshot_hotkey: true,
             screenshot_offer: false,
             update_check: true,
@@ -166,6 +170,9 @@ pub const BACKGROUND_STEPS: [i32; 5] = [10, 20, 30, 40, 50];
 
 /// The caption backdrops offered (DWM's system backdrop types).
 pub const TITLE_BACKDROPS: [&str; 4] = ["acrylic", "mica", "tabbed", "none"];
+
+/// What the RAM and CPU line counts: nothing, Kilno alone, Kilno and its sessions.
+pub const RESOURCE_MODES: [&str; 3] = ["off", "kilno", "all"];
 
 /// "#rrggbb" (or "rrggbb") as its three bytes.
 pub fn hex_color(s: &str) -> Option<[u8; 3]> {
@@ -339,6 +346,10 @@ impl KilnoSettings {
                 .filter(|t| TITLE_BACKDROPS.contains(&t.as_str()))
                 .unwrap_or(d.title_backdrop.clone()),
             title_session: b("titleShowsSession", d.title_session),
+            resource_usage: s("resourceUsage")
+                .map(|t| t.to_lowercase())
+                .filter(|t| RESOURCE_MODES.contains(&t.as_str()))
+                .unwrap_or(d.resource_usage.clone()),
             screenshot_hotkey: b("screenshotHotkey", d.screenshot_hotkey),
             screenshot_offer: b("screenshotOffer", d.screenshot_offer),
             update_check: b("updateCheck", d.update_check),
@@ -408,6 +419,9 @@ impl KilnoSettings {
         }
         if self.title_session {
             w.bool("titleShowsSession", true);
+        }
+        if self.resource_usage != Self::default().resource_usage {
+            w.str("resourceUsage", &self.resource_usage);
         }
         w.bool("screenshotHotkey", self.screenshot_hotkey);
         w.bool("screenshotOffer", self.screenshot_offer);
