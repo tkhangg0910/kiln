@@ -90,6 +90,7 @@ pub fn icon(c: char) -> char {
         '\u{E722}' => '\u{25CE}', // camera: ◎
         '\u{E737}' => '\u{25A2}', // ▢
         '\u{E768}' => '\u{25B6}', // play: ▶
+        '\u{E706}' => '\u{263C}', // brightness: ☼
         '\u{E790}' => '\u{25D0}', // colour: ◐
         '\u{E7BA}' => '\u{26A0}', // warning: ⚠
         '\u{E7E8}' => '\u{23FB}', // power: ⏻
@@ -99,6 +100,7 @@ pub fn icon(c: char) -> char {
         '\u{E8B7}' => '\u{25A4}', // folder: ▤
         '\u{E8BB}' => '\u{2715}', // close: ✕
         '\u{E916}' => '\u{25F7}', // stopwatch: ◷
+        '\u{E91B}' => '\u{25A3}', // photo: ▣
         '\u{E946}' => '\u{24D8}', // info: ⓘ
         '\u{E9D2}' => '\u{2261}', // ≡
         '\u{EA18}' => '\u{25C8}', // shield: ◈

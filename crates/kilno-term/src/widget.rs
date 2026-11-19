@@ -556,7 +556,9 @@ fn colors(cell: &alacritty_terminal::term::cell::Cell, overrides: &alacritty_ter
 #[allow(clippy::too_many_arguments)]
 fn paint(ui: &Ui, term: &Terminal, state: &mut ViewState, rect: Rect, origin: Pos2, cell: Vec2, tf: &TermFont, focused: bool, response: &Response) {
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, c32(palette::BACKGROUND));
+    let bg = c32(palette::BACKGROUND);
+    let alpha = palette::BACKGROUND_ALPHA.load(std::sync::atomic::Ordering::Relaxed);
+    painter.rect_filled(rect, 0.0, egui::Color32::from_rgba_unmultiplied(bg.r(), bg.g(), bg.b(), alpha));
     let row_h = ui.fonts_mut(|f| f.row_height(&tf.font));
     let text_dy = ((cell.y - row_h) / 2.0).max(0.0);
     let t = term.lock();

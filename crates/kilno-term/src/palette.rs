@@ -6,6 +6,10 @@ use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
 pub const BACKGROUND: Rgb = rgb(0x14171c);
+
+/// How opaque the terminal's own background is drawn (255: solid). Below 255 a picture under
+/// the terminal shows through, while text and coloured cells stay as they are.
+pub static BACKGROUND_ALPHA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(255);
 pub const FOREGROUND: Rgb = rgb(0xc8cdd6);
 pub const CURSOR: Rgb = rgb(0xd4a24c);
 pub const CURSOR_ACCENT: Rgb = rgb(0x14171c);

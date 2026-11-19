@@ -91,6 +91,10 @@ pub struct KilnoSettings {
     pub claude_path: Option<String>,
     pub codex_path: Option<String>,
     pub opencode_path: Option<String>,
+    /// A picture drawn faintly over the whole window (Settings › General); None draws nothing.
+    pub background_image: Option<String>,
+    /// How strongly, in percent: one of BACKGROUND_STEPS.
+    pub background_opacity: i32,
     pub screenshot_hotkey: bool,
     pub screenshot_offer: bool,
     pub update_check: bool,
@@ -129,6 +133,8 @@ impl Default for KilnoSettings {
             claude_path: None,
             codex_path: None,
             opencode_path: None,
+            background_image: None,
+            background_opacity: 20,
             screenshot_hotkey: true,
             screenshot_offer: false,
             update_check: true,
@@ -144,6 +150,9 @@ pub const RESERVE_STEPS: [i32; 4] = [0, 70, 80, 90];
 
 /// The live usage intervals offered, in minutes.
 pub const LIVE_USAGE_STEPS: [i32; 3] = [1, 2, 5];
+
+/// The background picture's strengths offered, in percent.
+pub const BACKGROUND_STEPS: [i32; 5] = [10, 20, 30, 40, 50];
 
 /// `<data dir>\settings.json`.
 pub fn default_path(data: &DataDir) -> PathBuf {
@@ -261,6 +270,12 @@ impl KilnoSettings {
             .and_then(|n| i32::try_from(n).ok())
             .filter(|n| LIVE_USAGE_STEPS.contains(n))
             .unwrap_or(d.live_usage_minutes);
+        let background_opacity = root
+            .get("backgroundOpacity")
+            .and_then(Value::as_i64)
+            .and_then(|n| i32::try_from(n).ok())
+            .filter(|n| BACKGROUND_STEPS.contains(n))
+            .unwrap_or(d.background_opacity);
         let reserve_at = root
             .get("reserveAt")
             .and_then(Value::as_i64)
@@ -293,6 +308,8 @@ impl KilnoSettings {
             claude_path: s("claudePath"),
             codex_path: s("codexPath"),
             opencode_path: s("openCodePath"),
+            background_image: s("backgroundImage"),
+            background_opacity,
             screenshot_hotkey: b("screenshotHotkey", d.screenshot_hotkey),
             screenshot_offer: b("screenshotOffer", d.screenshot_offer),
             update_check: b("updateCheck", d.update_check),
@@ -346,6 +363,13 @@ impl KilnoSettings {
         }
         if let Some(p) = &self.opencode_path {
             w.str("openCodePath", p);
+        }
+        // Kilno-only keys, written only when set, so a Clayo file saves back unchanged.
+        if let Some(p) = &self.background_image {
+            w.str("backgroundImage", p);
+        }
+        if self.background_opacity != Self::default().background_opacity {
+            w.raw("backgroundOpacity", &self.background_opacity.to_string());
         }
         w.bool("screenshotHotkey", self.screenshot_hotkey);
         w.bool("screenshotOffer", self.screenshot_offer);

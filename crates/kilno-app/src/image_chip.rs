@@ -138,7 +138,7 @@ impl Pictures {
     }
 }
 
-fn decode(path: &Path, height: u32) -> Option<ColorImage> {
+pub(crate) fn decode(path: &Path, height: u32) -> Option<ColorImage> {
     let bytes = std::fs::read(path).ok()?;
     let img = image::load_from_memory(&bytes).ok()?;
     let img = if height > 0 && img.height() > height {
