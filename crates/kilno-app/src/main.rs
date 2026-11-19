@@ -4,6 +4,7 @@
 mod agent_logo;
 mod app;
 mod background;
+mod title_bar;
 mod fonts;
 mod image_chip;
 mod island_host;

@@ -388,3 +388,24 @@ fn background_round_trip() {
     let odd = KilnoSettings::from_map(&odd);
     assert_eq!((odd.background_image, odd.background_opacity), (None, 20));
 }
+
+/// The title bar: written only when set; a colour that is not a hex or "picture" falls back.
+#[test]
+fn title_bar_round_trip() {
+    let d = KilnoSettings::default();
+    assert_eq!((d.title_color.as_str(), d.title_backdrop.as_str(), d.title_session), ("", "acrylic", false));
+    assert!(!d.to_json().contains("titleBar"), "defaults are not written");
+
+    for color in ["picture", "#2B3A4A"] {
+        let on = KilnoSettings { title_color: color.into(), title_backdrop: "mica".into(), title_session: true, ..d.clone() };
+        let root: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&on.to_json()).unwrap();
+        assert_eq!(KilnoSettings::from_map(&root), on, "round trip");
+    }
+
+    let odd: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(r#"{"titleBarColor":"red","titleBarBackdrop":"Glass"}"#).unwrap();
+    let odd = KilnoSettings::from_map(&odd);
+    assert_eq!((odd.title_color.as_str(), odd.title_backdrop.as_str()), ("", "acrylic"));
+    assert_eq!(kilno_core::settings::hex_color("#0a0B0c"), Some([10, 11, 12]));
+    assert_eq!(kilno_core::settings::hex_color("#0a0B0"), None);
+}
