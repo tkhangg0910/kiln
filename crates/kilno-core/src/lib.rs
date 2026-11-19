@@ -6,6 +6,7 @@ pub mod agent;
 pub mod cli;
 pub mod crash;
 pub mod doc;
+pub mod files;
 pub mod git;
 pub mod images;
 pub mod island;

@@ -11,6 +11,7 @@ mod image_chip;
 mod island_host;
 mod latency;
 mod doc_view;
+mod files_panel;
 mod model;
 mod pane;
 mod pages_open;

@@ -75,6 +75,7 @@ see [docs/linux.md](docs/linux.md).
 | Search and resume | Find any past session by text and pick up where it stopped |
 | Branch from here | Fork a session at any point and keep the original |
 | Doc viewer | Read the Markdown docs and HTML pages a session writes, rendered offline |
+| Files | The session's folder beside the terminal: read Markdown and pictures, fix a `.env` or a config in a plain editor |
 | Status themes | Numbers, bars, rings or chips for context and limits |
 | Ask-before guard | Sessions Kilno starts must ask you before they push, tag, release or merge ([details](docs/configuration.md#settings-pages)) |
 

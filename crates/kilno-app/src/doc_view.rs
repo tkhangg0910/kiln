@@ -145,8 +145,34 @@ pub fn show(ui: &mut Ui, rect: Rect, body: Rect, v: &mut DocViewer, share: &mut 
     let g = elided(ui, &v.name(), ui_font(12.0), TEXT_MUTED, name_right - inner.left());
     p.galley(Pos2::new(inner.left(), inner.center().y - g.size().y / 2.0), g, TEXT_MUTED);
 
-    // The doc, styled as the C# doc CSS (TH:243-248).
     let content = Rect::from_min_max(Pos2::new(rect.left() + 1.0, bar.bottom()), rect.max);
+    out.links = markdown(ui, content, v.id, &v.text, cache);
+
+    if v.mode == Mode::Split {
+        grip(ui, rect, body, share);
+    }
+    out
+}
+
+/// The split's grip: 8 px over `rect`'s left border; amber while hovered or dragged (TH:31-36).
+pub fn grip(ui: &mut Ui, rect: Rect, body: Rect, share: &mut f32) {
+    let grip = Rect::from_min_max(Pos2::new(rect.left() - 4.0, rect.top()), Pos2::new(rect.left() + 4.0, rect.bottom()));
+    let resp = ui.interact(grip, Id::NULL.with("doc-grip"), Sense::drag()).on_hover_cursor(CursorIcon::ResizeHorizontal);
+    let resp = if resp.dragged() { resp } else { resp.on_hover_text("Drag to resize") };
+    if resp.dragged() {
+        ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
+        if let Some(x) = ui.ctx().pointer_interact_pos().map(|p| p.x) {
+            *share = ((body.right() - x) / body.width().max(1.0)).clamp(SHARE_MIN, SHARE_MAX);
+        }
+    }
+    if resp.hovered() || resp.dragged() {
+        ui.painter().vline(rect.left(), rect.y_range(), Stroke::new(2.0, WORKING));
+    }
+}
+
+/// Prepared markdown in `content`, styled as the C# doc CSS (TH:243-248), scrolled under `id`.
+/// Links clicked come back, to be asked about, not opened (TH:274-280).
+pub fn markdown(ui: &mut Ui, content: Rect, id: Id, text: &str, cache: &mut CommonMarkCache) -> Vec<String> {
     let before = ui.ctx().output(|o| o.commands.len());
     ui.scope_builder(UiBuilder::new().max_rect(content), |ui| {
         doc_style(ui);
@@ -156,44 +182,28 @@ pub fn show(ui: &mut Ui, rect: Rect, body: Rect, v: &mut DocViewer, share: &mut 
             top: 18,
             bottom: 40,
         });
-        CommonMarkViewer::new().show_alt_text_on_hover(false).show_scrollable(v.id, ui, cache, &scroll, &v.text);
+        CommonMarkViewer::new().show_alt_text_on_hover(false).show_scrollable(id, ui, cache, &scroll, text);
     });
-    // Links in the doc come back here, to be asked about, not opened (TH:274-280).
+    let mut links = Vec::new();
     ui.ctx().output_mut(|o| {
         let mut i = 0;
         o.commands.retain(|c| {
             i += 1;
             match c {
                 OutputCommand::OpenUrl(u) if i > before => {
-                    out.links.push(u.url.clone());
+                    links.push(u.url.clone());
                     false
                 }
                 _ => true,
             }
         });
     });
-
-    // The grip: 8 px over the left border; amber while hovered or dragged (TH:31-36).
-    if v.mode == Mode::Split {
-        let grip = Rect::from_min_max(Pos2::new(rect.left() - 4.0, rect.top()), Pos2::new(rect.left() + 4.0, rect.bottom()));
-        let resp = ui.interact(grip, Id::NULL.with("doc-grip"), Sense::drag()).on_hover_cursor(CursorIcon::ResizeHorizontal);
-        let resp = if resp.dragged() { resp } else { resp.on_hover_text("Drag to resize") };
-        if resp.dragged() {
-            ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
-            if let Some(x) = ui.ctx().pointer_interact_pos().map(|p| p.x) {
-                *share = ((body.right() - x) / body.width().max(1.0)).clamp(SHARE_MIN, SHARE_MAX);
-            }
-        }
-        if resp.hovered() || resp.dragged() {
-            p.vline(rect.left(), rect.y_range(), Stroke::new(2.0, WORKING));
-        }
-    }
-    out
+    links
 }
 
 /// The bar's buttons: 12 px, hairline border, radius 4, padding 2,8; hover RaisedBg and
 /// TextPrimary; the active mode amber.
-fn bar_button(ui: &mut Ui, text: &str, on: bool) -> egui::Response {
+pub fn bar_button(ui: &mut Ui, text: &str, on: bool) -> egui::Response {
     let g = ui.painter().layout_no_wrap(text.to_string(), ui_font(12.0), TEXT_MUTED);
     let size = Vec2::new(g.size().x + 16.0, 20.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
