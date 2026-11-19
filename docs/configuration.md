@@ -29,8 +29,8 @@ Everything is set from **Settings** (gear button, bottom-left of the sidebar). K
 | `useOpenCode` | `false` | OpenCode too; written only when `true` |
 | `defaultAgent` | `claude` | `claude`, `codex`, `opencode` or `ask` for New session |
 | `claudePath`, `codexPath`, `openCodePath` | unset | Use this agent binary instead of the one on PATH |
-| `backgroundImage` | unset | A picture drawn faintly over the whole window (cropped to fill it); written only when set |
-| `backgroundOpacity` | `15` | How strongly it shows, in percent: 5, 10, 15, 20 or 30; written only when not 15 |
+| `backgroundImage` | unset | A picture behind the whole window (cropped to fill it); written only when set |
+| `backgroundOpacity` | `20` | How strongly it shows through the panels, in percent: 10, 20, 30, 40 or 50; written only when not 20 |
 | `screenshotHotkey` | `true` | Own Ctrl+Alt+S |
 | `screenshotOffer` | `false` | Offer each new screenshot from the island |
 | `updateCheck` | `true` | Check GitHub releases of `tkhangg0910/kilno` |

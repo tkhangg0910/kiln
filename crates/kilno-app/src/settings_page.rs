@@ -130,12 +130,12 @@ impl SettingsPage {
         let mut out = Vec::new();
         let mut s = settings.clone();
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0, TERMINAL_BG);
+        ui.painter().rect_filled(rect, 0, crate::background::veil(TERMINAL_BG));
 
         // The header, as a session's: 44 high, the title strong, a close button.
         let head = top_band(rect, 44.0);
         let p = ui.painter();
-        p.rect_filled(head, 0, SURFACE_BG);
+        p.rect_filled(head, 0, crate::background::veil(SURFACE_BG));
         p.hline(head.x_range(), head.bottom() - 0.5, Stroke::new(1.0, HAIRLINE));
         p.text(Pos2::new(head.left() + 14.0, head.center().y), Align2::LEFT_CENTER, "Settings", semibold(12.0), TEXT_PRIMARY);
         let close = icon_button(ui, Id::NULL.with("settings-close"), Pos2::new(head.right() - 14.0, head.center().y), '\u{E8BB}', true);
@@ -250,7 +250,7 @@ impl SettingsPage {
         let mut spec = Row::new(Lead::Icon('\u{E91B}'), "Background image", Right::Button("Choose…")).corners(true, false);
         spec = match &s.background_image {
             Some(p) => spec.line_owned(p.clone(), MUTED_AA).link("Remove"),
-            None => spec.line("A picture drawn faintly over the whole window, like VS Code's background.", MUTED_AA),
+            None => spec.line("A picture behind the whole window, showing through the panels; text stays sharp.", MUTED_AA),
         };
         let r = row(ui, Id::NULL.with("background"), spec);
         if r.button {
@@ -271,7 +271,7 @@ impl SettingsPage {
             ui,
             Id::NULL.with("background-opacity"),
             Row::new(Lead::Icon('\u{E706}'), "Strength", Right::Segments { labels: &steps, chosen })
-                .line("How strongly the picture shows through.", MUTED_AA)
+                .line("How strongly the picture shows through the panels.", MUTED_AA)
                 .sep()
                 .corners(false, true),
         );

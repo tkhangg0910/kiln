@@ -1,7 +1,10 @@
-//! The window's background picture (Settings › General). Drawn faintly over everything, as
-//! VS Code's background extensions do, so panes and panels need no transparency of their own.
+//! The window's background picture (Settings › General). Drawn first, under everything; the
+//! big fills (sidebar, header, terminal) then let it show through by its strength, so text and
+//! controls are drawn over it at full contrast, as in Windows Terminal.
 
-use egui::{Color32, Context, Id, LayerId, Order, Pos2, Rect, TextureHandle, TextureOptions, Vec2};
+use egui::{Color32, Pos2, Rect, TextureHandle, TextureOptions, Ui, Vec2};
+use kilno_term::palette::BACKGROUND_ALPHA;
+use std::sync::atomic::Ordering;
 
 #[derive(Default)]
 pub struct Background {
@@ -11,20 +14,27 @@ pub struct Background {
 }
 
 impl Background {
-    pub fn paint(&mut self, ctx: &Context, rect: Rect, path: Option<&str>, opacity: i32) {
+    /// Before anything else of the frame is drawn.
+    pub fn paint(&mut self, ui: &Ui, rect: Rect, path: Option<&str>, strength: i32) {
         if self.path.as_deref() != path {
             self.path = path.map(str::to_string);
             // shortcut: decoded on the UI thread, once per pick; move to a thread if big files stall.
             self.tex = path
                 .and_then(|p| crate::image_chip::decode(std::path::Path::new(p), 0))
-                .map(|img| ctx.load_texture("kilno-background", img, TextureOptions::LINEAR));
+                .map(|img| ui.ctx().load_texture("kilno-background", img, TextureOptions::LINEAR));
         }
-        let Some(tex) = &self.tex else { return };
-        let alpha = (opacity.clamp(0, 100) * 255 / 100) as u8;
-        // Above the window's own background layer, below dialogs and popups.
-        ctx.layer_painter(LayerId::new(Order::Background, Id::NULL.with("kilno-background")))
-            .image(tex.id(), rect, cover_uv(tex.size_vec2(), rect.size()), Color32::from_white_alpha(alpha));
+        let Some(tex) = &self.tex else {
+            BACKGROUND_ALPHA.store(255, Ordering::Relaxed);
+            return;
+        };
+        ui.painter().image(tex.id(), rect, cover_uv(tex.size_vec2(), rect.size()), Color32::WHITE);
+        BACKGROUND_ALPHA.store(255 - (strength.clamp(0, 100) * 255 / 100) as u8, Ordering::Relaxed);
     }
+}
+
+/// `c` as a big fill: see-through by the picture's strength while one is set.
+pub fn veil(c: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), BACKGROUND_ALPHA.load(Ordering::Relaxed))
 }
 
 /// The part of the picture that fills `area` without stretching: centred, the overflow cropped.

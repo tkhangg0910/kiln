@@ -1226,7 +1226,7 @@ impl KilnoApp {
 
     fn draw_sidebar(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0, SURFACE_BG);
+        ui.painter().rect_filled(rect, 0, crate::background::veil(SURFACE_BG));
         // The account's limits sit above the actions, 12 px apart; none, and the gap goes too.
         // So does the Update button, when there is a release to offer.
         let limits_h = status_view::limits_height(ui, &self.status_frame.meters, self.settings.theme);
@@ -1726,7 +1726,7 @@ impl KilnoApp {
 
     fn draw_terminal_side(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0, TERMINAL_BG);
+        ui.painter().rect_filled(rect, 0, crate::background::veil(TERMINAL_BG));
         if self.settings_open {
             self.draw_settings(ui);
             return;
@@ -1740,7 +1740,7 @@ impl KilnoApp {
     fn draw_header(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
         let p = ui.painter();
-        p.rect_filled(rect, 0, SURFACE_BG);
+        p.rect_filled(rect, 0, crate::background::veil(SURFACE_BG));
         p.hline(rect.x_range(), rect.bottom() - 0.5, Stroke::new(1.0, HAIRLINE));
         let active = self.active_pane();
         let (status, title, has_id) = match active {
@@ -2264,11 +2264,11 @@ impl eframe::App for KilnoApp {
         let side = Rect::from_min_size(full.min, Vec2::new(self.sidebar_w, full.height()));
         let split = Rect::from_min_size(Pos2::new(side.right(), full.top()), Vec2::new(SPLITTER_W, full.height()));
         let term = Rect::from_min_max(Pos2::new(split.right(), full.top()), full.max);
+        self.background.paint(ui, full, self.settings.background_image.as_deref(), self.settings.background_opacity);
         ui.scope_builder(UiBuilder::new().max_rect(side), |ui| self.draw_sidebar(ui));
         ui.painter().rect_filled(split, 0, Color32::TRANSPARENT);
         self.splitter(ui, split, full.width());
         ui.scope_builder(UiBuilder::new().max_rect(term), |ui| self.draw_terminal_side(ui));
-        self.background.paint(&ctx, full, self.settings.background_image.as_deref(), self.settings.background_opacity);
         self.update_confirm(&ctx);
         self.link_confirm(&ctx);
         self.run_actions(&ctx, frame);

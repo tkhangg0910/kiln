@@ -376,7 +376,7 @@ fn live_usage_round_trip() {
 #[test]
 fn background_round_trip() {
     let d = KilnoSettings::default();
-    assert_eq!((d.background_image.as_deref(), d.background_opacity), (None, 15));
+    assert_eq!((d.background_image.as_deref(), d.background_opacity), (None, 20));
     assert!(!d.to_json().contains("background"), "defaults are not written");
 
     let on = KilnoSettings { background_image: Some(r"C:\pics\cat.png".into()), background_opacity: 30, ..d.clone() };
@@ -386,5 +386,5 @@ fn background_round_trip() {
     let odd: serde_json::Map<String, serde_json::Value> =
         serde_json::from_str(r#"{"backgroundImage":"","backgroundOpacity":99}"#).unwrap();
     let odd = KilnoSettings::from_map(&odd);
-    assert_eq!((odd.background_image, odd.background_opacity), (None, 15));
+    assert_eq!((odd.background_image, odd.background_opacity), (None, 20));
 }

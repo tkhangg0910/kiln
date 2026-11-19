@@ -134,7 +134,7 @@ impl Default for KilnoSettings {
             codex_path: None,
             opencode_path: None,
             background_image: None,
-            background_opacity: 15,
+            background_opacity: 20,
             screenshot_hotkey: true,
             screenshot_offer: false,
             update_check: true,
@@ -152,7 +152,7 @@ pub const RESERVE_STEPS: [i32; 4] = [0, 70, 80, 90];
 pub const LIVE_USAGE_STEPS: [i32; 3] = [1, 2, 5];
 
 /// The background picture's strengths offered, in percent.
-pub const BACKGROUND_STEPS: [i32; 5] = [5, 10, 15, 20, 30];
+pub const BACKGROUND_STEPS: [i32; 5] = [10, 20, 30, 40, 50];
 
 /// `<data dir>\settings.json`.
 pub fn default_path(data: &DataDir) -> PathBuf {
