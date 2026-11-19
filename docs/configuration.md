@@ -7,7 +7,7 @@ Everything is set from **Settings** (gear button, bottom-left of the sidebar). K
 
 | Page | What you set |
 |---|---|
-| General | Start at login, a background image, check for updates. Closing the window keeps sessions running; the Kilno icon in the notification area (or the island) brings it back. Quit from the gear menu, the island or the icon's menu. |
+| General | Start at login, a background image, the title bar's colour, backdrop and title, check for updates. Closing the window keeps sessions running; the Kilno icon in the notification area (or the island) brings it back. Quit from the gear menu, the island or the icon's menu. |
 | Status bar | Theme (Numbers, Bars, Rings, Chips), which items show in the pane header (model, branch, context, effort, 5-hour and 7-day limits, a model's own weekly limit such as Fable's), the limits in the sidebar footer, and a warning near a limit (70, 80 or 90 %). Live usage: ask Anthropic for the limits `/usage` shows (off by default). Click a limit in the footer to read it again. |
 | Security | "Ask before" rules: the Claude sessions Kilno starts stop and ask before they push, tag, release, merge or change the repo on GitHub. Your own Claude rules are shown read-only. |
 | Agents | Reopens the setup window: use Claude Code, Codex, OpenCode or any mix, pick the default for New session, or point Kilno at an agent binary. |
@@ -31,6 +31,9 @@ Everything is set from **Settings** (gear button, bottom-left of the sidebar). K
 | `claudePath`, `codexPath`, `openCodePath` | unset | Use this agent binary instead of the one on PATH |
 | `backgroundImage` | unset | A picture behind the whole window (cropped to fill it); written only when set |
 | `backgroundOpacity` | `20` | How strongly it shows through the panels, in percent: 10, 20, 30, 40 or 50; written only when not 20 |
+| `titleBarColor` | unset | The title bar's colour (Windows 11): `picture` (the background image's average) or `#rrggbb`; unset keeps it dark |
+| `titleBarBackdrop` | `acrylic` | The dark title bar's backdrop: `acrylic`, `mica`, `tabbed` or `none` |
+| `titleShowsSession` | `false` | The window title (taskbar, Alt+Tab) names the session shown; written only when `true` |
 | `screenshotHotkey` | `true` | Own Ctrl+Alt+S |
 | `screenshotOffer` | `false` | Offer each new screenshot from the island |
 | `updateCheck` | `true` | Check GitHub releases of `tkhangg0910/kilno` |

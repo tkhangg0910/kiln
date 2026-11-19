@@ -11,6 +11,8 @@ pub struct Background {
     /// The path the texture was made from; reloaded when Settings names another.
     path: Option<String>,
     tex: Option<TextureHandle>,
+    /// The picture's average colour, for a title bar that matches it.
+    pub average: Option<[u8; 3]>,
 }
 
 impl Background {
@@ -19,9 +21,9 @@ impl Background {
         if self.path.as_deref() != path {
             self.path = path.map(str::to_string);
             // shortcut: decoded on the UI thread, once per pick; move to a thread if big files stall.
-            self.tex = path
-                .and_then(|p| crate::image_chip::decode(std::path::Path::new(p), 0))
-                .map(|img| ui.ctx().load_texture("kilno-background", img, TextureOptions::LINEAR));
+            let img = path.and_then(|p| crate::image_chip::decode(std::path::Path::new(p), 0));
+            self.average = img.as_ref().and_then(|i| average(&i.pixels));
+            self.tex = img.map(|img| ui.ctx().load_texture("kilno-background", img, TextureOptions::LINEAR));
         }
         let Some(tex) = &self.tex else {
             BACKGROUND_ALPHA.store(255, Ordering::Relaxed);
@@ -37,6 +39,18 @@ pub fn veil(c: Color32) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), BACKGROUND_ALPHA.load(Ordering::Relaxed))
 }
 
+/// The mean of every 97th pixel: enough for a colour, quick on an 8K picture.
+fn average(px: &[Color32]) -> Option<[u8; 3]> {
+    let (mut sum, mut n) = ([0u64; 3], 0u64);
+    for c in px.iter().step_by(97) {
+        for (s, v) in sum.iter_mut().zip([c.r(), c.g(), c.b()]) {
+            *s += u64::from(v);
+        }
+        n += 1;
+    }
+    (n > 0).then(|| sum.map(|s| (s / n) as u8))
+}
+
 /// The part of the picture that fills `area` without stretching: centred, the overflow cropped.
 fn cover_uv(img: Vec2, area: Vec2) -> Rect {
     if img.x <= 0.0 || img.y <= 0.0 || area.x <= 0.0 || area.y <= 0.0 {
@@ -50,6 +64,12 @@ fn cover_uv(img: Vec2, area: Vec2) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn average_of_two_colours() {
+        assert_eq!(average(&[Color32::from_rgb(0, 100, 200), Color32::from_rgb(0, 100, 200)]), Some([0, 100, 200]));
+        assert_eq!(average(&[]), None);
+    }
 
     #[test]
     fn cover_crops_the_long_side_and_keeps_the_middle() {

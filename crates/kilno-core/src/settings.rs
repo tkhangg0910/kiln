@@ -95,6 +95,13 @@ pub struct KilnoSettings {
     pub background_image: Option<String>,
     /// How strongly, in percent: one of BACKGROUND_STEPS.
     pub background_opacity: i32,
+    /// The title bar's colour: "" keeps the dark caption, "picture" takes the background
+    /// picture's average, else "#rrggbb". Windows 11 only.
+    pub title_color: String,
+    /// The caption's backdrop while it is dark: one of TITLE_BACKDROPS.
+    pub title_backdrop: String,
+    /// The window title (taskbar, Alt+Tab) names the session shown.
+    pub title_session: bool,
     pub screenshot_hotkey: bool,
     pub screenshot_offer: bool,
     pub update_check: bool,
@@ -135,6 +142,9 @@ impl Default for KilnoSettings {
             opencode_path: None,
             background_image: None,
             background_opacity: 20,
+            title_color: String::new(),
+            title_backdrop: "acrylic".into(),
+            title_session: false,
             screenshot_hotkey: true,
             screenshot_offer: false,
             update_check: true,
@@ -153,6 +163,19 @@ pub const LIVE_USAGE_STEPS: [i32; 3] = [1, 2, 5];
 
 /// The background picture's strengths offered, in percent.
 pub const BACKGROUND_STEPS: [i32; 5] = [10, 20, 30, 40, 50];
+
+/// The caption backdrops offered (DWM's system backdrop types).
+pub const TITLE_BACKDROPS: [&str; 4] = ["acrylic", "mica", "tabbed", "none"];
+
+/// "#rrggbb" (or "rrggbb") as its three bytes.
+pub fn hex_color(s: &str) -> Option<[u8; 3]> {
+    let h = s.strip_prefix('#').unwrap_or(s);
+    if h.len() != 6 || !h.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
 
 /// `<data dir>\settings.json`.
 pub fn default_path(data: &DataDir) -> PathBuf {
@@ -310,6 +333,12 @@ impl KilnoSettings {
             opencode_path: s("openCodePath"),
             background_image: s("backgroundImage"),
             background_opacity,
+            title_color: s("titleBarColor").filter(|c| c == "picture" || hex_color(c).is_some()).unwrap_or_default(),
+            title_backdrop: s("titleBarBackdrop")
+                .map(|t| t.to_lowercase())
+                .filter(|t| TITLE_BACKDROPS.contains(&t.as_str()))
+                .unwrap_or(d.title_backdrop.clone()),
+            title_session: b("titleShowsSession", d.title_session),
             screenshot_hotkey: b("screenshotHotkey", d.screenshot_hotkey),
             screenshot_offer: b("screenshotOffer", d.screenshot_offer),
             update_check: b("updateCheck", d.update_check),
@@ -370,6 +399,15 @@ impl KilnoSettings {
         }
         if self.background_opacity != Self::default().background_opacity {
             w.raw("backgroundOpacity", &self.background_opacity.to_string());
+        }
+        if !self.title_color.is_empty() {
+            w.str("titleBarColor", &self.title_color);
+        }
+        if self.title_backdrop != Self::default().title_backdrop {
+            w.str("titleBarBackdrop", &self.title_backdrop);
+        }
+        if self.title_session {
+            w.bool("titleShowsSession", true);
         }
         w.bool("screenshotHotkey", self.screenshot_hotkey);
         w.bool("screenshotOffer", self.screenshot_offer);

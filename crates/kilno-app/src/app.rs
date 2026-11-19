@@ -327,6 +327,9 @@ pub struct KilnoApp {
     /// The Settings page's own state (which page, open cards, own rules read).
     settings_page: crate::settings_page::SettingsPage,
     background: crate::background::Background,
+    title_bar: crate::title_bar::TitleBar,
+    /// The main window (0 off Windows), for its caption colours.
+    hwnd: isize,
     /// The image chip's thumbnails and full-size view.
     image_chip: ImageChip,
     /// The grid the terminal area fits, as last drawn: a new pane starts its console at it, as
@@ -454,6 +457,8 @@ impl KilnoApp {
             settings,
             settings_page: crate::settings_page::SettingsPage::new(data.clone()),
             background: Default::default(),
+            title_bar: Default::default(),
+            hwnd,
             data,
             model,
             jobs,
@@ -812,6 +817,11 @@ impl KilnoApp {
 
     fn active_pane(&self) -> Option<&Pane> {
         self.active.and_then(|id| self.pane(id))
+    }
+
+    /// A pane's name as the sidebar shows it (renamed or the session's title).
+    fn pane_name(&self, pane: &Pane) -> String {
+        lock(&self.model).sidebar.by_pane(pane.id()).map_or(pane.title.clone(), |r| r.name().to_string())
     }
 
     /// Switches to a pane; picking or starting a session also leaves Settings.
@@ -1744,11 +1754,7 @@ impl KilnoApp {
         p.hline(rect.x_range(), rect.bottom() - 0.5, Stroke::new(1.0, HAIRLINE));
         let active = self.active_pane();
         let (status, title, has_id) = match active {
-            Some(pane) => {
-                let m = lock(&self.model);
-                let name = m.sidebar.by_pane(pane.id()).map_or(pane.title.clone(), |r| r.name().to_string());
-                (Some(pane.status), name, pane.shared.session_id().is_some())
-            }
+            Some(pane) => (Some(pane.status), self.pane_name(pane), pane.shared.session_id().is_some()),
             None => (None, String::new(), false),
         };
         let has_pane = active.is_some();
@@ -2265,6 +2271,10 @@ impl eframe::App for KilnoApp {
         let split = Rect::from_min_size(Pos2::new(side.right(), full.top()), Vec2::new(SPLITTER_W, full.height()));
         let term = Rect::from_min_max(Pos2::new(split.right(), full.top()), full.max);
         self.background.paint(ui, full, self.settings.background_image.as_deref(), self.settings.background_opacity);
+        let look = crate::title_bar::look(&self.settings, self.background.average);
+        let session = if self.settings_open { None } else { self.active_pane().map(|p| self.pane_name(p)) };
+        let title = crate::title_bar::title(&self.settings, session.as_deref());
+        self.title_bar.apply(&ctx, self.hwnd, look, title);
         ui.scope_builder(UiBuilder::new().max_rect(side), |ui| self.draw_sidebar(ui));
         ui.painter().rect_filled(split, 0, Color32::TRANSPARENT);
         self.splitter(ui, split, full.width());

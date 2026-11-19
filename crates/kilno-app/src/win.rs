@@ -57,6 +57,25 @@ mod imp {
         set(34, 0x0035_2C26); // DWMWA_BORDER_COLOR #262C35 as COLORREF (BGR)
     }
 
+    /// The caption's colour (None: Windows' dark one, with the hairline border), its text
+    /// colour and the backdrop (DWMSBT_*: 1 none, 2 mica, 3 acrylic, 4 tabbed). Windows 11;
+    /// older builds ignore the attributes.
+    pub fn caption_colors(hwnd: isize, color: Option<[u8; 3]>, text: [u8; 3], backdrop: u32) {
+        let hwnd = HWND(hwnd as *mut _);
+        let set = |attr: i32, value: u32| {
+            // SAFETY: `value` lives for the call; size matches a DWORD attribute.
+            let _ = unsafe {
+                DwmSetWindowAttribute(hwnd, DWMWINDOWATTRIBUTE(attr), &value as *const u32 as *const _, 4)
+            };
+        };
+        let bgr = |[r, g, b]: [u8; 3]| u32::from(r) | u32::from(g) << 8 | u32::from(b) << 16;
+        const DEFAULT: u32 = 0xFFFF_FFFF; // DWMWA_COLOR_DEFAULT
+        set(38, backdrop); // DWMWA_SYSTEMBACKDROP_TYPE
+        set(35, color.map_or(DEFAULT, bgr)); // DWMWA_CAPTION_COLOR
+        set(36, if color.is_some() { bgr(text) } else { DEFAULT }); // DWMWA_TEXT_COLOR
+        set(34, color.map_or(0x0035_2C26, bgr)); // DWMWA_BORDER_COLOR, #262C35 by default
+    }
+
     /// What the clipboard holds that a paste can use.
     pub enum Clip {
         Text(String),

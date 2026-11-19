@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use kilno_core::paths::{claude_dir, codex_home, DataDir, OsEnv};
 use kilno_core::security::ask_rules::{self, AskGroup, GROUPS};
 use kilno_core::security::own_rules::{self, OwnRule, OwnRules};
-use kilno_core::settings::{KilnoSettings, StatusTheme, BACKGROUND_STEPS, LIVE_USAGE_STEPS, RESERVE_STEPS};
+use kilno_core::settings::{KilnoSettings, StatusTheme, BACKGROUND_STEPS, LIVE_USAGE_STEPS, RESERVE_STEPS, TITLE_BACKDROPS};
 use kilno_core::settings_view as view;
 use kilno_core::system::login_startup::LoginStartup;
 use kilno_core::system::updater::{self, Version};
@@ -220,7 +220,7 @@ impl SettingsPage {
     // ------------------------------------------------------------------ General
 
     fn general(&mut self, ui: &mut Ui, s: &mut KilnoSettings, info: &Info, out: &mut Vec<Out>) {
-        page_head(ui, "General", "How Kilno starts and what the window's close button does.");
+        page_head(ui, "General", "How Kilno starts and looks, and what the window's close button does.");
         let card = card_begin(ui);
         let (on, can) = self.login;
         let r = row(
@@ -277,6 +277,49 @@ impl SettingsPage {
         );
         if let Some(i) = r.segment {
             s.background_opacity = BACKGROUND_STEPS[i];
+        }
+        card_end(ui, card);
+
+        group_label(ui, "Title bar", 22.0);
+        let card = card_begin(ui);
+        if cfg!(windows) {
+            use crate::title_bar::PRESETS;
+            let mut colors: Vec<String> = PRESETS.iter().map(|(n, _)| n.to_string()).collect();
+            let chosen = PRESETS.iter().position(|(_, v)| v.eq_ignore_ascii_case(&s.title_color)).unwrap_or_else(|| {
+                colors.push("Custom".into()); // a hex set in settings.json
+                PRESETS.len()
+            });
+            let r = row(
+                ui,
+                Id::NULL.with("title-color"),
+                Row::new(Lead::Icon('\u{E790}'), "Colour", Right::Segments { labels: &colors, chosen })
+                    .line("Picture takes the background image's colour. Windows 11.", MUTED_AA)
+                    .corners(true, false),
+            );
+            if let Some(i) = r.segment.filter(|i| *i < PRESETS.len()) {
+                s.title_color = PRESETS[i].1.to_string();
+            }
+            let backdrops = ["Acrylic", "Mica", "Tabbed", "None"].map(String::from);
+            let chosen = TITLE_BACKDROPS.iter().position(|b| *b == s.title_backdrop).unwrap_or(0);
+            let r = row(
+                ui,
+                Id::NULL.with("title-backdrop"),
+                Row::new(Lead::Icon('\u{E7F4}'), "Backdrop", Right::Segments { labels: &backdrops, chosen })
+                    .line("The see-through effect behind a Dark title bar.", MUTED_AA)
+                    .sep(),
+            );
+            if let Some(i) = r.segment {
+                s.title_backdrop = TITLE_BACKDROPS[i].to_string();
+            }
+        }
+        let mut spec = Row::new(Lead::Icon('\u{E737}'), "Session name in the title", Right::Switch { on: s.title_session, enabled: true })
+            .line("The taskbar and Alt+Tab show the session you are in.", MUTED_AA)
+            .corners(!cfg!(windows), true);
+        if cfg!(windows) {
+            spec = spec.sep();
+        }
+        if row(ui, Id::NULL.with("title-session"), spec).toggled {
+            s.title_session = !s.title_session;
         }
         card_end(ui, card);
 
