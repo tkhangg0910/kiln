@@ -1996,6 +1996,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_commonmark",
+ "egui_extras",
  "embed-resource",
  "image",
  "kilno-core",

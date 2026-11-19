@@ -291,6 +291,8 @@ pub struct Pane {
     pub view: ViewState,
     /// The doc viewer, while open.
     pub doc: Option<crate::doc_view::DocViewer>,
+    /// The Files panel, while open (in the doc viewer's place).
+    pub files: Option<crate::files_panel::FilesPanel>,
     /// The viewer's share of the pane in split mode, kept for its next opening (TH:325-341).
     pub doc_share: f32,
 }
@@ -408,6 +410,7 @@ impl Pane {
                 v
             },
             doc: None,
+            files: None,
             doc_share: 0.5,
         }
     }

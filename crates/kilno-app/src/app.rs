@@ -253,6 +253,8 @@ enum Action {
     UpdateConfirmed,
     /// The doc chip: the viewer opens on the session's newest doc, or closes.
     ToggleDoc,
+    /// The Files panel (the session's folder) beside the terminal, or back.
+    ToggleFiles,
     /// A link clicked in the terminal or a doc: asked about first.
     AskLink(String),
     /// A page the session wrote, in the default browser (PORTING.md D3).
@@ -328,6 +330,8 @@ pub struct KilnoApp {
     settings_page: crate::settings_page::SettingsPage,
     background: crate::background::Background,
     title_bar: crate::title_bar::TitleBar,
+    /// KILNO_DEV_FILES was applied (debug builds).
+    dev_files_done: bool,
     /// The main window (0 off Windows), for its caption colours.
     hwnd: isize,
     /// The image chip's thumbnails and full-size view.
@@ -343,6 +347,8 @@ impl KilnoApp {
         cc.egui_ctx.set_fonts(crate::fonts::definitions());
         crate::mark("fonts");
         theme::install(&cc.egui_ctx);
+        // Pictures in Markdown (doc viewer, Files): local files only, made safe by doc::prepare.
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         cc.egui_ctx.send_viewport_cmd(ViewportCommand::SetTheme(egui::SystemTheme::Dark));
         let hwnd = main_hwnd(cc);
         #[cfg(windows)]
@@ -458,6 +464,7 @@ impl KilnoApp {
             settings_page: crate::settings_page::SettingsPage::new(data.clone()),
             background: Default::default(),
             title_bar: Default::default(),
+            dev_files_done: false,
             hwnd,
             data,
             model,
@@ -1075,6 +1082,7 @@ impl KilnoApp {
                 Action::Update => self.update_clicked(),
                 Action::UpdateConfirmed => self.update_confirmed(),
                 Action::ToggleDoc => self.toggle_doc(),
+                Action::ToggleFiles => self.toggle_files(),
                 Action::OpenPage(page) => {
                     if let Some(p) = self.active_pane() {
                         p.shared.pages_seen();
@@ -1179,10 +1187,31 @@ impl KilnoApp {
         if pane.doc.take().is_none() {
             let w = pane.shared.written();
             if let Some(doc) = w.doc {
-                pane.doc = Some(DocViewer::open(&doc, &pane.cwd, w.generation, seq));
+                // One panel beside the terminal: the doc replaces Files (unless it holds edits).
+                if !pane.files.as_ref().is_some_and(|f| f.dirty()) {
+                    pane.files = None;
+                    pane.doc = Some(DocViewer::open(&doc, &pane.cwd, w.generation, seq));
+                }
             }
         }
         self.focus_terminal = true;
+    }
+
+    /// The Files button: the session's folder beside the terminal, or closed (not while the
+    /// editor holds unsaved edits: its own ✕ asks about them).
+    fn toggle_files(&mut self) {
+        let Some(pane) = self.active.and_then(|id| self.panes.iter_mut().find(|p| p.id() == id)) else { return };
+        match &pane.files {
+            Some(f) if f.dirty() => {}
+            Some(_) => {
+                pane.files = None;
+                self.focus_terminal = true;
+            }
+            None => {
+                pane.doc = None;
+                pane.files = Some(crate::files_panel::FilesPanel::new(&pane.cwd));
+            }
+        }
     }
 
     // ------------------------------------------------------------------ drawing
@@ -1774,6 +1803,12 @@ impl KilnoApp {
                 self.actions.push(Action::CloseActive);
             }
             ui.add_space(8.0);
+            let files = quiet_button(ui, "Files", has_pane, Vec2::new(10.0, 5.0), true)
+                .on_hover_text("The session's folder beside the terminal: read Markdown and pictures, edit a text file (.env, configs).");
+            if files.clicked() {
+                self.actions.push(Action::ToggleFiles);
+            }
+            ui.add_space(8.0);
             let fork = quiet_button(ui, "Branch from here", has_pane && has_id, Vec2::new(10.0, 5.0), true)
                 .on_hover_text("Copies this conversation into a new session. The original is untouched.");
             if fork.clicked() {
@@ -1851,9 +1886,10 @@ impl KilnoApp {
             let w = pane.shared.written();
             v.follow(w.doc.as_deref(), w.generation, &pane.cwd, &mut self.md_cache, seq);
         }
-        let (term_rect, doc_rect) = match &pane.doc {
-            Some(v) => doc_view::layout(rect, v.mode, pane.doc_share),
-            None => (Some(rect), rect),
+        let (term_rect, doc_rect) = match (&pane.doc, &pane.files) {
+            (Some(v), _) => doc_view::layout(rect, v.mode, pane.doc_share),
+            (None, Some(_)) => doc_view::layout(rect, doc_view::Mode::Split, pane.doc_share),
+            (None, None) => (Some(rect), rect),
         };
         let mut links = Vec::new();
         let mut paste = false;
@@ -1875,7 +1911,7 @@ impl KilnoApp {
             for bytes in &out.input {
                 pane.shared.type_keys(bytes);
             }
-            if pane.doc.is_none() {
+            if pane.doc.is_none() && pane.files.is_none() {
                 self.grid = pane.shared.term.size();
             }
             if let Some(size) = out.resized {
@@ -1898,6 +1934,14 @@ impl KilnoApp {
                 pane.doc = None;
             }
             if out.close || out.focus_terminal {
+                self.focus_terminal = true;
+            }
+            links.extend(out.links);
+        }
+        if let Some(f) = pane.files.as_mut() {
+            let out = crate::files_panel::show(ui, doc_rect, rect, f, &mut pane.doc_share, &mut self.md_cache);
+            if out.close {
+                pane.files = None;
                 self.focus_terminal = true;
             }
             links.extend(out.links);
@@ -2264,6 +2308,20 @@ impl eframe::App for KilnoApp {
             return;
         }
         self.handle_keys(&ctx);
+        // Debug builds: KILNO_DEV_FILES opens the Files panel on the first pane, and the file it
+        // names (relative to the pane's folder) when that is a file (rendering checks).
+        if cfg!(debug_assertions) {
+            if let Some(pane) = self.panes.first_mut().filter(|p| p.files.is_none()) {
+                if let Some(file) = std::env::var_os("KILNO_DEV_FILES").filter(|_| !self.dev_files_done) {
+                    self.dev_files_done = true;
+                    let mut f = crate::files_panel::FilesPanel::new(&pane.cwd);
+                    if pane.cwd.join(&file).is_file() {
+                        f.open_file(&ctx, &pane.cwd.join(file));
+                    }
+                    pane.files = Some(f);
+                }
+            }
+        }
         self.status_frame = self.status_frame();
         let full = ui.max_rect();
         self.sidebar_w = clamp_sidebar(self.sidebar_w, full.width());

@@ -77,7 +77,8 @@ pub fn prepare(markdown: &str, doc_dir: &Path, root: &Path) -> String {
             Some(file) => {
                 out.push_str("![");
                 out.push_str(&escape(&alt));
-                out.push_str("](<file://");
+                // `file:///C:/x` on Windows: two slashes would name a network host (`\\C:\x`).
+                out.push_str(if file.starts_with('/') { "](<file://" } else { "](<file:///" });
                 out.push_str(&file);
                 out.push_str(">)");
             }
@@ -103,7 +104,8 @@ fn local_image(dest: &str, doc_dir: &Path, root: &Path) -> Option<String> {
     }
     let full = normalize(&doc_dir.join(&dest));
     let ok = is_inside(root, &full) && full.is_file() && crate::images::is_image(&full);
-    ok.then(|| full.to_string_lossy().replace('\\', "/")).filter(|p| !p.contains(['<', '>', '\n']))
+    // No `%`: egui's file loader would also try the percent-decoded name, a different file.
+    ok.then(|| full.to_string_lossy().replace('\\', "/")).filter(|p| !p.contains(['<', '>', '\n', '%']))
 }
 
 /// Text that reads as itself in markdown.
@@ -162,7 +164,8 @@ mod tests {
         let docs = root.join("docs");
         let shown = prepare("![A](img/a%20b.png)", &docs, &root);
         let want = normalize(&root.join("docs").join("img").join("a b.png")).to_string_lossy().replace('\\', "/");
-        assert_eq!(shown, format!("![A](<file://{want}>)"));
+        let slashes = if want.starts_with('/') { "//" } else { "///" };
+        assert_eq!(shown, format!("![A](<file:{slashes}{want}>)"), "a local file URI, never a host");
         // Outside the session's folder, missing, not an image, or a file: URL: alt text.
         assert_eq!(prepare("![B](../../out.png)", &docs, &root), "B");
         assert_eq!(prepare("![C](img/none.png)", &docs, &root), "C");
