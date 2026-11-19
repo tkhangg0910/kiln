@@ -178,6 +178,7 @@ Rust crates, in the crate source on crates.io).
 | [strict-num](https://github.com/RazrFalcon/strict-num) | 0.1.1 | MIT |
 | [syn](https://github.com/dtolnay/syn) | 2.0.119 | MIT OR Apache-2.0 |
 | [syn](https://github.com/dtolnay/syn) | 3.0.10 | MIT OR Apache-2.0 |
+| [sysinfo](https://github.com/GuillaumeGomez/sysinfo) | 0.40.4 | MIT |
 | [thiserror](https://github.com/dtolnay/thiserror) | 2.0.21 | MIT OR Apache-2.0 |
 | [thiserror-impl](https://github.com/dtolnay/thiserror) | 2.0.21 | MIT OR Apache-2.0 |
 | [tiny-skia](https://github.com/RazrFalcon/tiny-skia) | 0.11.4 | BSD-3-Clause |
