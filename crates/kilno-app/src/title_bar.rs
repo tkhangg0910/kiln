@@ -26,9 +26,9 @@ pub struct Look {
     pub backdrop: u32,
 }
 
-pub fn look(s: &KilnoSettings, picture_average: Option<[u8; 3]>) -> Look {
+pub fn look(s: &KilnoSettings, picture_accent: Option<[u8; 3]>) -> Look {
     let color = match s.title_color.as_str() {
-        "picture" => picture_average,
+        "picture" => picture_accent,
         c => hex_color(c),
     };
     let backdrop = match TITLE_BACKDROPS.iter().position(|b| *b == s.title_backdrop) {

@@ -76,6 +76,11 @@ pub struct PaneShared {
 }
 
 impl PaneShared {
+    /// The shell's process id, while it runs (RAM and CPU count its whole tree).
+    pub fn pid(&self) -> Option<u32> {
+        self.pty.lock().ok()?.as_ref().map(|p| p.pid()).filter(|p| *p != 0)
+    }
+
     /// Write to the PTY (keys, pastes, prefill).
     pub fn write(&self, bytes: &[u8]) {
         if let Ok(p) = self.pty.lock() {
