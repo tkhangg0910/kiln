@@ -11,8 +11,8 @@ pub struct Background {
     /// The path the texture was made from; reloaded when Settings names another.
     path: Option<String>,
     tex: Option<TextureHandle>,
-    /// The picture's average colour, for a title bar that matches it.
-    pub average: Option<[u8; 3]>,
+    /// The picture's most striking colour, darkened, for a title bar that matches it.
+    pub accent: Option<[u8; 3]>,
 }
 
 impl Background {
@@ -22,7 +22,7 @@ impl Background {
             self.path = path.map(str::to_string);
             // shortcut: decoded on the UI thread, once per pick; move to a thread if big files stall.
             let img = path.and_then(|p| crate::image_chip::decode(std::path::Path::new(p), 0));
-            self.average = img.as_ref().and_then(|i| average(&i.pixels));
+            self.accent = img.as_ref().and_then(|i| accent(&i.pixels));
             self.tex = img.map(|img| ui.ctx().load_texture("kilno-background", img, TextureOptions::LINEAR));
         }
         let Some(tex) = &self.tex else {
@@ -39,16 +39,50 @@ pub fn veil(c: Color32) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), BACKGROUND_ALPHA.load(Ordering::Relaxed))
 }
 
-/// The mean of every 97th pixel: enough for a colour, quick on an 8K picture.
-fn average(px: &[Color32]) -> Option<[u8; 3]> {
-    let (mut sum, mut n) = ([0u64; 3], 0u64);
+/// The picture's most striking colour, as Android's palette or Spotify's covers pick one: the
+/// hue (in 12 bands) with the most vivid area, averaged within that band, then darkened enough
+/// for a title bar. A picture with no vivid colour gives its plain mean. Every 97th pixel is
+/// enough, and quick on an 8K picture.
+fn accent(px: &[Color32]) -> Option<[u8; 3]> {
+    let mut bands = [(0.0f64, [0.0f64; 3]); 12];
+    let (mut mean, mut n) = ([0.0f64; 3], 0.0);
     for c in px.iter().step_by(97) {
-        for (s, v) in sum.iter_mut().zip([c.r(), c.g(), c.b()]) {
-            *s += u64::from(v);
+        let rgb = [c.r(), c.g(), c.b()].map(f64::from);
+        for (m, v) in mean.iter_mut().zip(rgb) {
+            *m += v;
         }
-        n += 1;
+        n += 1.0;
+        let (max, min) = (rgb.iter().copied().fold(0.0, f64::max), rgb.iter().copied().fold(255.0, f64::min));
+        let (v, s) = (max / 255.0, if max > 0.0 { (max - min) / max } else { 0.0 });
+        if s < 0.25 || v < 0.2 {
+            continue; // greys, near-black: not a colour to pick
+        }
+        let w = s * v;
+        let band = &mut bands[(hue(rgb, max, min) / 30.0) as usize % 12];
+        band.0 += w;
+        for (sum, x) in band.1.iter_mut().zip(rgb) {
+            *sum += x * w;
+        }
     }
-    (n > 0).then(|| sum.map(|s| (s / n) as u8))
+    if n == 0.0 {
+        return None;
+    }
+    let (w, sum) = bands.iter().copied().fold((0.0, [0.0; 3]), |best, b| if b.0 > best.0 { b } else { best });
+    let rgb = if w > 0.0 { sum.map(|x| x / w) } else { mean.map(|x| x / n) };
+    // A title bar, not a poster: brightness at most 45 %, the hue and saturation kept.
+    let max = rgb.iter().copied().fold(1.0, f64::max);
+    let scale = (0.45 * 255.0 / max).min(1.0);
+    Some(rgb.map(|x| (x * scale).round() as u8))
+}
+
+/// Hue in degrees, 0..360.
+fn hue([r, g, b]: [f64; 3], max: f64, min: f64) -> f64 {
+    let d = max - min;
+    if d == 0.0 {
+        return 0.0;
+    }
+    let h = if max == r { (g - b) / d } else if max == g { 2.0 + (b - r) / d } else { 4.0 + (r - g) / d };
+    (h * 60.0).rem_euclid(360.0)
 }
 
 /// The part of the picture that fills `area` without stretching: centred, the overflow cropped.
@@ -66,9 +100,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn average_of_two_colours() {
-        assert_eq!(average(&[Color32::from_rgb(0, 100, 200), Color32::from_rgb(0, 100, 200)]), Some([0, 100, 200]));
-        assert_eq!(average(&[]), None);
+    fn accent_is_the_vivid_colour_not_the_mud() {
+        // Mostly grey and skin, a fair share of cyan: the cyan wins, darkened to 45 %.
+        let mut px = vec![Color32::from_rgb(120, 120, 120); 97 * 60];
+        px.extend(vec![Color32::from_rgb(40, 200, 210); 97 * 30]);
+        px.extend(vec![Color32::from_rgb(230, 190, 170); 97 * 10]);
+        let a = accent(&px).unwrap();
+        assert!(a[2] > a[0] && a[1] > a[0], "cyan, not grey or skin: {a:?}");
+        assert_eq!(a.iter().max(), Some(&115), "brightness capped at 45 %");
+        // All grey: its mean, already dark enough.
+        assert_eq!(accent(&[Color32::from_rgb(60, 60, 60); 200]), Some([60, 60, 60]));
+        assert_eq!(accent(&[]), None);
     }
 
     #[test]

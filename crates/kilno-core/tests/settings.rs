@@ -409,3 +409,18 @@ fn title_bar_round_trip() {
     assert_eq!(kilno_core::settings::hex_color("#0a0B0c"), Some([10, 11, 12]));
     assert_eq!(kilno_core::settings::hex_color("#0a0B0"), None);
 }
+
+/// RAM and CPU: off by default and not written; an unknown mode falls back to off.
+#[test]
+fn resource_usage_round_trip() {
+    let d = KilnoSettings::default();
+    assert_eq!(d.resource_usage, "off");
+    assert!(!d.to_json().contains("resourceUsage"));
+    for mode in ["kilno", "all"] {
+        let on = KilnoSettings { resource_usage: mode.into(), ..d.clone() };
+        let root: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&on.to_json()).unwrap();
+        assert_eq!(KilnoSettings::from_map(&root), on);
+    }
+    let odd: serde_json::Map<String, serde_json::Value> = serde_json::from_str(r#"{"resourceUsage":"gpu"}"#).unwrap();
+    assert_eq!(KilnoSettings::from_map(&odd).resource_usage, "off");
+}
