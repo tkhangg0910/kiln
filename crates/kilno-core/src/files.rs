@@ -98,14 +98,33 @@ pub fn read_text(path: &Path) -> io::Result<String> {
 }
 
 /// Writes `text` beside `path` and swaps it in, so a failure midway leaves the old file whole.
+/// The new file gets the old one's permissions (a `.env` kept at 600 stays private), and the
+/// temp file is created fresh, private, never through something already at its name.
 pub fn save(path: &Path, text: &str) -> io::Result<()> {
+    use std::io::Write;
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".kilno-save");
     let tmp = PathBuf::from(tmp);
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path).inspect_err(|_| {
+    let perms = std::fs::metadata(path).ok().map(|m| m.permissions());
+    let _ = std::fs::remove_file(&tmp); // a leftover from a crash
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+    let result = (|| {
+        let mut f = opts.open(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        drop(f);
+        if let Some(p) = perms {
+            std::fs::set_permissions(&tmp, p)?;
+        }
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
         let _ = std::fs::remove_file(&tmp);
-    })
+    }
+    result
 }
 
 #[cfg(test)]
@@ -164,5 +183,17 @@ mod tests {
         save(&p, &text.replace("A=1", "A=2")).unwrap();
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "\u{feff}A=2\r\n");
         assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_keeps_a_private_file_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join(".env");
+        std::fs::write(&p, "SECRET=1\n").unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+        save(&p, "SECRET=2\n").unwrap();
+        assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o600);
     }
 }
