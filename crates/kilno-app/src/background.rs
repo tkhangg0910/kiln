@@ -34,9 +34,27 @@ impl Background {
     }
 }
 
-/// `c` as a big fill: see-through by the picture's strength while one is set.
+/// `c` as a big fill: see-through by the picture's strength while one is set. Each spot of the
+/// window gets one veil only: a second on top darkens it past the strength the user chose.
 pub fn veil(c: Color32) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), BACKGROUND_ALPHA.load(Ordering::Relaxed))
+}
+
+/// The fill of something drawn on a spot already veiled (a panel beside the terminal): nothing
+/// while a picture shows, `c` otherwise.
+pub fn over_veil(c: Color32) -> Color32 {
+    if BACKGROUND_ALPHA.load(Ordering::Relaxed) == 255 { c } else { Color32::TRANSPARENT }
+}
+
+/// A small fill on a veiled spot (a hovered or chosen row, the sidebar's footer band, a button):
+/// `c` without a picture; with one, a see-through white (`lift` > 0) or black (`lift` < 0) of
+/// that strength, so the row lightens or darkens what is under it and the picture shows through.
+pub fn shade(c: Color32, lift: f32) -> Color32 {
+    if BACKGROUND_ALPHA.load(Ordering::Relaxed) == 255 {
+        return c;
+    }
+    let a = (lift.abs().clamp(0.0, 1.0) * 255.0) as u8;
+    if lift >= 0.0 { Color32::from_white_alpha(a) } else { Color32::from_black_alpha(a) }
 }
 
 /// The picture's most striking colour, as Android's palette or Spotify's covers pick one: the

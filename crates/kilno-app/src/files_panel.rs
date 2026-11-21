@@ -179,7 +179,7 @@ fn name_of(p: &Path) -> String {
 pub fn show(ui: &mut Ui, rect: Rect, body: Rect, f: &mut FilesPanel, share: &mut f32, cache: &mut CommonMarkCache) -> FilesOut {
     let mut out = FilesOut::default();
     let p = ui.painter().clone();
-    p.rect_filled(rect, 0, crate::background::veil(TERMINAL_BG));
+    p.rect_filled(rect, 0, crate::background::over_veil(TERMINAL_BG));
     p.vline(rect.left() + 0.5, rect.y_range(), Stroke::new(1.0, HAIRLINE));
 
     // The bar: "Files" or "‹ Files" and the file's name; on the right ✕, then Save or ⟳.

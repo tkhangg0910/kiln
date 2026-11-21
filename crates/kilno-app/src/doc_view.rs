@@ -114,7 +114,9 @@ pub fn layout(body: Rect, mode: Mode, share: f32) -> (Option<Rect>, Rect) {
 pub fn show(ui: &mut Ui, rect: Rect, body: Rect, v: &mut DocViewer, share: &mut f32, cache: &mut CommonMarkCache) -> ViewerOut {
     let mut out = ViewerOut::default();
     let p = ui.painter().clone();
-    p.rect_filled(rect, 0, crate::background::veil(TERMINAL_BG));
+    // Beside the terminal the pane's veil is enough; Full lies on the terminal's text.
+    let fill = if v.mode == Mode::Full { crate::background::veil(TERMINAL_BG) } else { crate::background::over_veil(TERMINAL_BG) };
+    p.rect_filled(rect, 0, fill);
     // Full covers the terminal: nothing under it may take a click.
     if v.mode == Mode::Full {
         ui.interact(rect, Id::NULL.with("doc-cover"), Sense::click_and_drag());

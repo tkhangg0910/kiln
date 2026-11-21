@@ -235,7 +235,7 @@ pub fn quiet_button(ui: &mut Ui, text: &str, enabled: bool, padding: Vec2, borde
     if ui.is_rect_visible(rect) {
         let hovered = enabled && resp.hovered();
         if hovered {
-            ui.painter().rect_filled(rect, 4, RAISED_BG);
+            ui.painter().rect_filled(rect, 4, crate::background::shade(RAISED_BG, 0.07));
         }
         if border && enabled {
             ui.painter().rect_stroke(rect, 4, Stroke::new(1.0, HAIRLINE), StrokeKind::Inside);
@@ -271,7 +271,8 @@ pub fn ghost_button(ui: &mut Ui, glyph: Option<char>, label: &str, accent: bool,
     if ui.is_rect_visible(rect) {
         let hover = ui.ctx().animate_bool_with_time(resp.id.with("hover"), resp.hovered(), 0.16);
         let p = ui.painter();
-        let (bg, rim) = if accent { (ACCENT_BG, ACCENT_RIM) } else { (Color32::TRANSPARENT, GHOST_RIM) };
+        let (bg, rim) =
+            if accent { (crate::background::shade(ACCENT_BG, 0.06), ACCENT_RIM) } else { (Color32::TRANSPARENT, GHOST_RIM) };
         p.rect_filled(rect, 6, bg);
         p.rect_stroke(rect, 6, Stroke::new(1.0, rim), StrokeKind::Inside);
         let pressed = resp.is_pointer_button_down_on();

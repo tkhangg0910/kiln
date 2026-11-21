@@ -130,11 +130,10 @@ impl SettingsPage {
         let mut out = Vec::new();
         let mut s = settings.clone();
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0, crate::background::veil(TERMINAL_BG));
-
         // The header, as a session's: 44 high, the title strong, a close button.
         let head = top_band(rect, 44.0);
         let p = ui.painter();
+        p.rect_filled(Rect::from_min_max(Pos2::new(rect.left(), head.bottom()), rect.max), 0, crate::background::veil(TERMINAL_BG));
         p.rect_filled(head, 0, crate::background::veil(SURFACE_BG));
         p.hline(head.x_range(), head.bottom() - 0.5, Stroke::new(1.0, HAIRLINE));
         p.text(Pos2::new(head.left() + 14.0, head.center().y), Align2::LEFT_CENTER, "Settings", semibold(12.0), TEXT_PRIMARY);
