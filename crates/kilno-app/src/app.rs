@@ -1493,10 +1493,10 @@ impl KilnoApp {
         if ui.is_rect_visible(rect) {
             let p = ui.painter();
             if selected {
-                p.rect_filled(rect, 0, ROW_SELECTED);
+                p.rect_filled(rect, 0, crate::background::shade(ROW_SELECTED, 0.08));
                 p.rect_filled(Rect::from_min_size(rect.min, Vec2::new(2.0, rect.height())), 0, WORKING);
             } else if resp.hovered() {
-                p.rect_filled(rect, 0, ROW_HOVER);
+                p.rect_filled(rect, 0, crate::background::shade(ROW_HOVER, 0.05));
             }
             let x0 = rect.left() + 2.0 + 34.0 + row.depth as f32 * 15.0;
             let top = rect.top() + 7.0;
@@ -1625,7 +1625,7 @@ impl KilnoApp {
 
     fn draw_footer(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0, FOOTER_BAND);
+        ui.painter().rect_filled(rect, 0, crate::background::shade(FOOTER_BAND, -0.15));
         ui.painter().hline(rect.x_range(), rect.top() + 0.5, Stroke::new(1.0, HAIRLINE));
         // The account's limits (LimitsView), then the Update button, then the actions.
         let mut top = rect.top() + 1.0 + 12.0;
@@ -1779,13 +1779,14 @@ impl KilnoApp {
 
     fn draw_terminal_side(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0, crate::background::veil(TERMINAL_BG));
         if self.settings_open {
             self.draw_settings(ui);
             return;
         }
         let header = top_band(rect, HEADER_H);
         let body = Rect::from_min_max(Pos2::new(rect.left(), header.bottom()), rect.max);
+        // The header veils its own band; this is the body's one veil (the terminal adds none).
+        ui.painter().rect_filled(body, 0, crate::background::veil(TERMINAL_BG));
         ui.scope_builder(UiBuilder::new().max_rect(header), |ui| self.draw_header(ui));
         ui.scope_builder(UiBuilder::new().max_rect(body), |ui| self.draw_pane(ui));
     }
@@ -2212,7 +2213,7 @@ fn section_header(ui: &mut Ui, label: &str, count: usize, open: bool) -> egui::R
     let p = ui.painter();
     let hovered = resp.hovered();
     if hovered {
-        p.rect_filled(rect, 0, ROW_HOVER);
+        p.rect_filled(rect, 0, crate::background::shade(ROW_HOVER, 0.05));
     }
     let cy = rect.center().y;
     chevron(p, Pos2::new(rect.left() + 10.0 + 3.0, cy), open, if hovered { TEXT_MUTED } else { TEXT_FAINT });
@@ -2240,7 +2241,7 @@ fn tiny_combo(ui: &mut Ui, text: &str) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let p = ui.painter();
     if resp.hovered() {
-        p.rect_filled(rect, 4, RAISED_BG);
+        p.rect_filled(rect, 4, crate::background::shade(RAISED_BG, 0.07));
     }
     let gy = rect.center().y - g.size().y / 2.0;
     let gx = rect.left() + 7.0;
